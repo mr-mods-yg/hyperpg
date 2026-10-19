@@ -377,6 +377,7 @@ func releaseIsNewer(channel, releaseTag, current string) (bool, string) {
 
 func stableVersionParts(value string) ([3]uint64, error) {
 	var parts [3]uint64
+	value = strings.TrimPrefix(value, "v")
 	value = strings.SplitN(value, "+", 2)[0]
 	value = strings.SplitN(value, "-", 2)[0]
 	segments := strings.Split(value, ".")
@@ -404,5 +405,5 @@ func nightlyRunNumber(tag string) (uint64, bool) {
 }
 
 func currentAppVersion() string {
-	return strings.TrimSpace(embeddedVersion)
+	return strings.TrimPrefix(strings.TrimSpace(embeddedVersion), "\ufeff")
 }

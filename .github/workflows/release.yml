@@ -98,7 +98,7 @@ jobs:
         shell: pwsh
         env:
           APP_VERSION: ${{ needs.source.outputs.version }}
-        run: Set-Content -Path VERSION -Value $env:APP_VERSION -NoNewline
+        run: Set-Content -Path VERSION -Value $env:APP_VERSION -Encoding utf8NoBOM -NoNewline
 
       - name: Set application version (Linux)
         if: matrix.platform == 'linux'
