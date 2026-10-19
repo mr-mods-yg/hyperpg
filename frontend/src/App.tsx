@@ -570,7 +570,21 @@ function App() {
                         <tbody>{filteredRows.map(({ row, index }) => <tr key={index}><td className="row-index">{pageOffset + index + 1}</td>{row.map((value, columnIndex) => {
                           const cellId = `${selectedTable.schema}.${selectedTable.name}:${index}:${columnIndex}`
                           const isExpanded = expandedCell === cellId
-                          return <td key={`${index}-${columnIndex}`} className={isExpanded ? 'is-expanded' : ''} tabIndex={0} onClick={() => setExpandedCell(isExpanded ? '' : cellId)} onKeyDown={(event) => {
+                          return <td key={`${index}-${columnIndex}`} className={isExpanded ? 'is-expanded' : ''} tabIndex={0} onClick={(event) => {
+                            event.currentTarget.focus()
+                            setExpandedCell(isExpanded ? '' : cellId)
+                          }} onKeyDown={(event) => {
+                            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+                              event.preventDefault()
+                              const valueContainer = event.currentTarget.querySelector('.cell-value-scroll')
+                              if (valueContainer) {
+                                const range = document.createRange()
+                                range.selectNodeContents(valueContainer)
+                                window.getSelection()?.removeAllRanges()
+                                window.getSelection()?.addRange(range)
+                              }
+                              return
+                            }
                             if (event.key === 'Enter' || event.key === ' ') {
                               event.preventDefault()
                               setExpandedCell(isExpanded ? '' : cellId)
