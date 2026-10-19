@@ -1,92 +1,52 @@
-# Welcome to Your New Wails3 Project!
+# HyperPG
 
-Congratulations on generating your Wails3 application! This README will guide you through the next steps to get your project up and running.
+HyperPG is a lightweight desktop client for browsing PostgreSQL databases. Paste a PostgreSQL connection URL, then explore schemas, tables, columns, and rows in a simple sidebar and table view.
 
-## Getting Started
+## Download
 
-1. Navigate to your project directory in the terminal.
+The latest stable release is **[v1.0.0](https://github.com/mr-mods-yg/hyperpg/releases/tag/v1.0.0)**. Download the build for your system:
 
-2. To run your application in development mode, use the following command:
+- [Windows x64](https://github.com/mr-mods-yg/hyperpg/releases/latest/download/hyperpg-windows-amd64.exe)
+- [Linux x64](https://github.com/mr-mods-yg/hyperpg/releases/latest/download/hyperpg-linux-amd64.tar.gz)
+- [All releases, including nightly builds](https://github.com/mr-mods-yg/hyperpg/releases)
 
-   ```
-   wails3 dev
-   ```
+The Windows executable is portable. On Linux, extract the archive and run `hyperpg`. Linux builds require GTK 4 and WebKitGTK 6.0 at runtime.
 
-   This will start your application and enable hot-reloading for both frontend and backend changes.
+## Features
 
-3. To build your application for production, use:
+- Browse database schemas, tables, columns, and rows. HyperPG's table browser is read-only.
+- Page through table rows and choose how many rows to display.
+- Resize the sidebar and collapse schema groups.
+- Switch between light and dark themes.
+- Save connection details locally in SQLite. Connection URLs are encrypted with AES-GCM, using a key held in the operating system's credential store.
+- Receive stable or nightly updates in the app. HyperPG checks at launch, verifies downloaded assets with their SHA-256 digest, and can restart to apply an update. Keep the app in a folder your account can write to.
 
-   ```
-   wails3 build
-   ```
+## Update channels
 
-   This will create a production-ready executable in the `build` directory.
+Choose **Stable** or **Nightly** in Settings. Stable releases use version tags on `master`; the nightly channel tracks prereleases built from `nightly`. A new version can be installed from the in-app update alert.
 
-## Exploring Wails3 Features
+## Build from source
 
-Now that you have your project set up, it's time to explore the features that Wails3 offers:
-
-1. **Check out the examples**: The best way to learn is by example. Visit the `examples` directory in the `v3/examples` directory to see various sample applications.
-
-2. **Run an example**: To run any of the examples, navigate to the example's directory and use:
-
-   ```
-   go run .
-   ```
-
-   Note: Some examples may be under development during the alpha phase.
-
-3. **Explore the documentation**: Visit the [Wails3 documentation](https://v3.wails.io/) for in-depth guides and API references.
-
-4. **Join the community**: Have questions or want to share your progress? Join the [Wails Discord](https://discord.gg/JDdSxwjhGf) or visit the [Wails discussions on GitHub](https://github.com/wailsapp/wails/discussions).
-
-## Project Structure
-
-Take a moment to familiarize yourself with your project structure:
-
-- `frontend/`: Contains your frontend code (HTML, CSS, JavaScript/TypeScript)
-- `main.go`: The entry point of your Go backend
-- `app.go`: Define your application structure and methods here
-- `wails.json`: Configuration file for your Wails project
-
-## Next Steps
-
-1. Modify the frontend in the `frontend/` directory to create your desired UI.
-2. Add backend functionality in `main.go`.
-3. Use `wails3 dev` to see your changes in real-time.
-4. When ready, build your application with `wails3 build`.
-
-Happy coding with Wails3! If you encounter any issues or have questions, don't hesitate to consult the documentation or reach out to the Wails community.
-
-## Changelog
-
-Notable changes are tracked in [CHANGELOG.md](CHANGELOG.md), using the [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) format and Semantic Versioning.
-
-## Release branches
-
-- `master` is the stable line. Stable releases are created from version tags such as `v1.0.0` on commits reachable from `master`.
-- `nightly` is the prerelease line. A push to `nightly` builds a prerelease immediately; the scheduled workflow also rebuilds its latest commit daily at 02:17 UTC.
-- Set `master` as the GitHub repository's default branch so the scheduled workflow is enabled. Push both `master` and `nightly` to the repository.
-- Each release includes a Windows executable and a Linux `tar.gz` containing the Linux executable. Linux requires GTK 4 and WebKitGTK 6.0 at runtime.
-- Choose **Stable** or **Nightly** in Settings to receive updates from that release channel. HyperPG checks for updates at launch and verifies release downloads against GitHub's SHA-256 asset digest before restarting into the update. Keep the app in a folder your user account can write to so it can update itself.
-
-To publish the initial branches after committing the release setup on `master`:
+You need Go 1.25, Node.js 22, and the Wails CLI `v3.0.0-beta.28`. Linux builds also need GTK 4 and WebKitGTK 6.0 development libraries.
 
 ```sh
-git push -u origin master
-git switch nightly
-git merge master
-git push -u origin nightly
-git switch master
+go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
+cd frontend
+npm ci
+cd ..
+wails3 dev
 ```
 
-Before creating a stable tag, move the corresponding changes from `[Unreleased]` into a dated version section in `CHANGELOG.md`, then push the tag:
+Build a production app with:
 
 ```sh
-git switch master
-git tag -a v1.0.0 -m "hyperpg v1.0.0"
-git push origin master
-git push origin v1.0.0
+wails3 build
 ```
 
-The release workflow checks that the tag points to `master` and uses that version's changelog section as the GitHub release notes.
+## Releases
+
+- `master` is the stable branch. Stable version tags such as `v1.0.0` must point to a commit on `master`. Before tagging a release, add its dated notes to `CHANGELOG.md` using [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
+- `nightly` is the prerelease branch. Each push creates a nightly release, and the workflow rebuilds its latest commit daily at 02:17 UTC. Set `master` as the repository's default branch so GitHub runs the scheduled workflow.
+- GitHub Actions builds Windows and Linux x64 assets and publishes them on the release page.
+
+See the [changelog](CHANGELOG.md) for release history and the [release workflow](.github/workflows/release.yml) for build details.
