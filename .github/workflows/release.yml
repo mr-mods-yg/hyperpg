@@ -2,6 +2,8 @@ name: Desktop releases
 
 on:
   push:
+    branches:
+      - nightly
     tags:
       - "v*"
   schedule:
@@ -33,7 +35,7 @@ jobs:
         shell: bash
         run: |
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF_TYPE" == "tag" ]]; then
             echo "channel=stable" >> "$GITHUB_OUTPUT"
             echo "version=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
           else
