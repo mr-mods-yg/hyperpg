@@ -1128,3 +1128,11 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(92, 187, 131
   .update-alert-copy strong { font-size: 11px; }
   .update-now-button { min-height: 30px; padding: 0 8px; font-size: 9px; }
 }
+
+.cell-value-scroll { width: 100%; overflow: hidden; white-space: nowrap; }
+.cell-value-scroll > * { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; white-space: nowrap; }
+.data-grid td.is-expanded .cell-value-scroll { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: #b5c3bd transparent; }
+.data-grid td.is-expanded .cell-value-scroll > * { width: max-content; max-width: none; overflow: visible; text-overflow: clip; }
+.data-grid td:focus { position: relative; z-index: 1; background: #eaf6ed; box-shadow: inset 0 0 0 2px #82c596; }
+:root[data-theme="dark"] .data-grid td.is-expanded .cell-value-scroll { scrollbar-color: #53645c transparent; }
+:root[data-theme="dark"] .data-grid td:focus { background: #203329; box-shadow: inset 0 0 0 2px #6eaa7e; }

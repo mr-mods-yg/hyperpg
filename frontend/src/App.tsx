@@ -27,6 +27,7 @@ function App() {
   const [tables, setTables] = useState<TableInfo[]>([])
   const [selectedTable, setSelectedTable] = useState<TableInfo | null>(null)
   const [tableData, setTableData] = useState<TableData | null>(null)
+  const [expandedCell, setExpandedCell] = useState('')
   const [tablesLoading, setTablesLoading] = useState(false)
   const [tableLoading, setTableLoading] = useState(false)
   const [tablesError, setTablesError] = useState('')
@@ -566,7 +567,30 @@ function App() {
                     {tableLoading ? <div className="table-loading"><span className="spinner" />Loading rows…</div> : tableData ? <div className="data-grid-wrap">
                       {tableData.columns.length === 0 ? <div className="empty-table">This table has no columns.</div> : filteredRows.length === 0 ? <div className="empty-table">{rowSearch ? 'No rows match your search.' : 'This table has no rows yet.'}</div> : <div className="data-grid-scroll"><table className="data-grid">
                         <thead><tr><th className="row-index-heading">#</th>{tableData.columns.map((column) => <th key={column.name}><span>{column.name}</span><small>{column.dataType}</small></th>)}</tr></thead>
-                        <tbody>{filteredRows.map(({ row, index }) => <tr key={index}><td className="row-index">{pageOffset + index + 1}</td>{row.map((value, columnIndex) => <td key={`${index}-${columnIndex}`}><CellValue value={value} /></td>)}</tr>)}</tbody>
+                        <tbody>{filteredRows.map(({ row, index }) => <tr key={index}><td className="row-index">{pageOffset + index + 1}</td>{row.map((value, columnIndex) => {
+                          const cellId = `${selectedTable.schema}.${selectedTable.name}:${index}:${columnIndex}`
+                          const isExpanded = expandedCell === cellId
+                          return <td key={`${index}-${columnIndex}`} className={isExpanded ? 'is-expanded' : ''} tabIndex={0} onClick={(event) => {
+                            event.currentTarget.focus()
+                            setExpandedCell(isExpanded ? '' : cellId)
+                          }} onKeyDown={(event) => {
+                            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+                              event.preventDefault()
+                              const valueContainer = event.currentTarget.querySelector('.cell-value-scroll')
+                              if (valueContainer) {
+                                const range = document.createRange()
+                                range.selectNodeContents(valueContainer)
+                                window.getSelection()?.removeAllRanges()
+                                window.getSelection()?.addRange(range)
+                              }
+                              return
+                            }
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              setExpandedCell(isExpanded ? '' : cellId)
+                            }
+                          }} aria-label={`Row ${pageOffset + index + 1}, ${tableData.columns[columnIndex]?.name ?? `column ${columnIndex + 1}`}: ${formatValue(value)}`}><div className="cell-value-scroll"><CellValue value={value} /></div></td>
+                        })}</tr>)}</tbody>
                       </table></div>}
                     </div> : null}
                     {tableData ? <div className="grid-pagination">
