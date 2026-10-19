@@ -4,6 +4,12 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-19
+
+### Added
+
+- Windows setup installer with Start Menu and desktop shortcuts, alongside the portable executable.
+
 ## [1.0.0] - 2026-10-19
 
 ### Added
