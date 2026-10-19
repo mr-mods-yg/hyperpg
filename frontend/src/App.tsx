@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { PostgresService } from '../bindings/changeme'
+import { PostgresService, UpdateService } from '../bindings/changeme'
 
 type ConnectionInfo = {
   id: string
@@ -14,6 +14,8 @@ type ColumnInfo = { name: string; dataType: string }
 type TableData = { columns: ColumnInfo[]; rows: unknown[][]; rowCount: number }
 type View = 'data' | 'structure'
 type Theme = 'light' | 'dark'
+type UpdateChannel = 'stable' | 'nightly'
+type UpdateInfo = { available: boolean; version: string; releaseUrl: string }
 
 const SIDEBAR_MIN_WIDTH = 190
 const SIDEBAR_MAX_WIDTH = 420
@@ -54,6 +56,21 @@ function App() {
   })
   const [resizingSidebar, setResizingSidebar] = useState(false)
   const [showSettingsDialog, setShowSettingsDialog] = useState(false)
+  const [updateChannel, setUpdateChannel] = useState<UpdateChannel>(() => {
+    try {
+      return localStorage.getItem('hyperpg-update-channel') === 'nightly' ? 'nightly' : 'stable'
+    } catch {
+      return 'stable'
+    }
+  })
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
+  const [updateCheckError, setUpdateCheckError] = useState('')
+  const [updateCheckMessage, setUpdateCheckMessage] = useState('')
+  const [checkingUpdates, setCheckingUpdates] = useState(false)
+  const [installingUpdate, setInstallingUpdate] = useState(false)
+  const [updateInstallError, setUpdateInstallError] = useState('')
+  const [dismissedUpdate, setDismissedUpdate] = useState('')
+  const [updateRefreshKey, setUpdateRefreshKey] = useState(0)
   const [theme, setTheme] = useState<Theme>(() => {
     try {
       return localStorage.getItem('hyperpg-theme') === 'dark' ? 'dark' : 'light'
@@ -105,6 +122,37 @@ function App() {
       // The current width remains active if local storage is unavailable.
     }
   }, [sidebarWidth])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('hyperpg-update-channel', updateChannel)
+    } catch {
+      // The selected channel remains active for this session if storage is unavailable.
+    }
+  }, [updateChannel])
+
+  useEffect(() => {
+    let cancelled = false
+    setCheckingUpdates(true)
+    setUpdateCheckError('')
+    setUpdateCheckMessage('')
+    setUpdateInstallError('')
+    setUpdateInfo(null)
+    setDismissedUpdate('')
+    UpdateService.CheckForUpdates(updateChannel)
+      .then((result) => {
+        if (cancelled) return
+        setUpdateInfo(result?.available ? result : null)
+        setUpdateCheckMessage(result?.available ? `Version ${result.version} is ready.` : 'You’re up to date.')
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setUpdateCheckError(errorMessage(error, 'Could not check for updates.'))
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingUpdates(false)
+      })
+    return () => { cancelled = true }
+  }, [updateChannel, updateRefreshKey])
 
   const handleSidebarPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
@@ -222,6 +270,20 @@ function App() {
     setConnectionName('')
     setShowUrl(false)
     setShowConnectionDialog(true)
+  }
+
+  const handleInstallUpdate = async () => {
+    setInstallingUpdate(true)
+    setUpdateCheckError('')
+    setUpdateInstallError('')
+    try {
+      await UpdateService.InstallUpdate(updateChannel)
+    } catch (error) {
+      const message = errorMessage(error, 'Could not install this update.')
+      setUpdateCheckError(message)
+      setUpdateInstallError(message)
+      setInstallingUpdate(false)
+    }
   }
 
   const handleConnect = async (event: FormEvent<HTMLFormElement>) => {
@@ -548,6 +610,13 @@ function App() {
         )}
       </main>
 
+      {updateInfo?.available && dismissedUpdate !== updateInfo.version && !showSettingsDialog && !showConnectionDialog ? <aside className={`update-alert ${updateInstallError ? 'has-error' : ''}`} role="alert">
+        <span className="update-alert-mark" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none"><path d="M9 2.2v8.2m0 3.4v.1M4.2 15.3h9.6" /><path d="m5.7 6.4 3.3-3.3 3.3 3.3" /></svg></span>
+        <span className="update-alert-copy"><strong>{updateInstallError ? 'Update could not start' : 'Update available'}</strong><small>{updateInstallError || `${updateInfo.version} · ${updateChannel === 'stable' ? 'Stable' : 'Nightly'}`}</small></span>
+        <button className="update-now-button" type="button" onClick={() => void handleInstallUpdate()} disabled={installingUpdate}>{installingUpdate ? <><span className="button-spinner" />Restarting</> : 'Update now'}</button>
+        <button className="update-dismiss" type="button" aria-label="Dismiss update notice" onClick={() => setDismissedUpdate(updateInfo.version)}><svg viewBox="0 0 18 18" fill="none"><path d="m4 4 10 10M14 4 4 14" /></svg></button>
+      </aside> : null}
+
       {showConnectionDialog ? <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !connecting) setShowConnectionDialog(false) }}>
         <section className="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
           <button className="dialog-close" type="button" aria-label="Close" onClick={() => setShowConnectionDialog(false)} disabled={connecting}><svg viewBox="0 0 18 18" fill="none"><path d="m4 4 10 10M14 4 4 14" /></svg></button>
@@ -569,7 +638,7 @@ function App() {
         <section className="connection-dialog settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
           <button className="dialog-close" type="button" aria-label="Close settings" onClick={() => setShowSettingsDialog(false)}><svg viewBox="0 0 18 18" fill="none"><path d="m4 4 10 10M14 4 4 14" /></svg></button>
           <div className="dialog-icon settings-icon"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.4v1.4M10 16.2v1.4M17.6 10h-1.4M3.8 10H2.4m13-5.4-1 1m-8.8 8.8-1 1m10.8 0-1-1m-8.8-8.8-1-1" /><circle cx="10" cy="10" r="4.2" /></svg></div>
-          <div className="dialog-heading"><h2 id="settings-title">Settings</h2><p>Choose how hyperpg looks on this device.</p></div>
+          <div className="dialog-heading"><h2 id="settings-title">Settings</h2><p>Control how hyperpg looks and updates.</p></div>
           <div className="settings-section">
             <span className="field-label">Appearance</span>
             <div className="theme-options" role="radiogroup" aria-label="Color theme">
@@ -585,7 +654,24 @@ function App() {
               </button>
             </div>
           </div>
-          <div className="dialog-note settings-note"><svg viewBox="0 0 18 18" fill="none"><path d="M9 2.2 3.2 4.5v4.1c0 3.3 2.5 5.9 5.8 7.2 3.3-1.3 5.8-3.9 5.8-7.2V4.5L9 2.2Z" /><path d="m6.4 8.8 1.7 1.7 3.6-3.7" /></svg><span>Your appearance choice is saved automatically on this device.</span></div>
+          <div className="settings-section update-settings-section">
+            <span className="field-label">Update channel</span>
+            <div className="theme-options update-channel-options" role="radiogroup" aria-label="Update channel">
+              <button className={`theme-option ${updateChannel === 'stable' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={updateChannel === 'stable'} onClick={() => setUpdateChannel('stable')}>
+                <span className="theme-option-copy"><strong>Stable</strong><small>Tested releases</small></span>
+                <span className="theme-radio" />
+              </button>
+              <button className={`theme-option ${updateChannel === 'nightly' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={updateChannel === 'nightly'} onClick={() => setUpdateChannel('nightly')}>
+                <span className="theme-option-copy"><strong>Nightly</strong><small>Latest daily build</small></span>
+                <span className="theme-radio" />
+              </button>
+            </div>
+            <div className="update-check-row">
+              <span className={updateCheckError ? 'update-check-message is-error' : 'update-check-message'} role={updateCheckError ? 'alert' : 'status'}>{updateCheckError || (checkingUpdates ? 'Checking for updates…' : updateCheckMessage || 'Checks when hyperpg starts.')}</span>
+              <button className="update-check-button" type="button" disabled={checkingUpdates || installingUpdate} onClick={() => setUpdateRefreshKey((key) => key + 1)}>{checkingUpdates ? 'Checking' : 'Check now'}</button>
+            </div>
+          </div>
+          <div className="dialog-note settings-note"><svg viewBox="0 0 18 18" fill="none"><path d="M9 2.2 3.2 4.5v4.1c0 3.3 2.5 5.9 5.8 7.2 3.3-1.3 5.8-3.9 5.8-7.2V4.5L9 2.2Z" /><path d="m6.4 8.8 1.7 1.7 3.6-3.7" /></svg><span>Appearance and update channel are saved automatically on this device.</span></div>
           <div className="dialog-actions"><button className="connect-button settings-done" type="button" onClick={() => setShowSettingsDialog(false)}>Done</button></div>
         </section>
       </div> : null}

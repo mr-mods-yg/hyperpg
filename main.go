@@ -25,6 +25,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	updateService := NewUpdateService()
 
 	// Create a new Wails application by providing the necessary options.
 	// Variables 'Name' and 'Description' are for application metadata.
@@ -37,6 +38,7 @@ func main() {
 		Icon:        appIcon,
 		Services: []application.Service{
 			application.NewService(postgresService),
+			application.NewService(updateService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -45,6 +47,7 @@ func main() {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 	})
+	updateService.setApp(app)
 
 	// Create a new window with the necessary options.
 	// 'Title' is the title of the window.

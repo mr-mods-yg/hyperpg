@@ -24,3 +24,9 @@ export interface TableInfo {
     "schema": string;
     "name": string;
 }
+
+export interface UpdateInfo {
+    "available": boolean;
+    "version": string;
+    "releaseUrl": string;
+}

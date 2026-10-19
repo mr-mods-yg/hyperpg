@@ -1,0 +1,217 @@
+name: Desktop releases
+
+on:
+  push:
+    tags:
+      - "v*"
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      channel: ${{ steps.resolve.outputs.channel }}
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || 'nightly' }}
+          fetch-depth: 0
+      - name: Resolve source commit and release channel
+        id: resolve
+        shell: bash
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+            echo "version=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=nightly" >> "$GITHUB_OUTPUT"
+            echo "version=nightly-$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: source
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            platform: windows
+            artifact: release-windows-amd64
+          - runner: ubuntu-24.04
+            platform: linux
+            artifact: release-linux-amd64
+    steps:
+      - name: Check out the resolved source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.source.outputs.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Linux build libraries
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
+
+      - name: Add Go tools to PATH (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: Add-Content -Path $env:GITHUB_PATH -Value (Join-Path (go env GOPATH) 'bin')
+
+      - name: Add Go tools to PATH (Linux)
+        if: matrix.platform == 'linux'
+        run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Set application version (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ needs.source.outputs.version }}
+        run: Set-Content -Path VERSION -Value $env:APP_VERSION -NoNewline
+
+      - name: Set application version (Linux)
+        if: matrix.platform == 'linux'
+        env:
+          APP_VERSION: ${{ needs.source.outputs.version }}
+        run: printf '%s' "$APP_VERSION" > VERSION
+
+      - name: Build application
+        run: wails3 build
+
+      - name: Package Windows executable
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path release -Force | Out-Null
+          Copy-Item bin\hyperpg.exe release\hyperpg-windows-amd64.exe
+
+      - name: Package Linux executable
+        if: matrix.platform == 'linux'
+        run: |
+          mkdir -p release
+          cp bin/hyperpg release/hyperpg
+          tar -C release -czf release/hyperpg-linux-amd64.tar.gz hyperpg
+          rm release/hyperpg
+
+      - name: Upload build asset
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact }}
+          path: release/*
+          if-no-files-found: error
+
+  publish:
+    needs: [source, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.source.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Download platform builds
+        uses: actions/download-artifact@v6
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Require stable tags to point into master
+        if: needs.source.outputs.channel == 'stable'
+        env:
+          SOURCE_SHA: ${{ needs.source.outputs.sha }}
+        run: |
+          git fetch origin master --no-tags
+          if ! git merge-base --is-ancestor "$SOURCE_SHA" FETCH_HEAD; then
+            echo "Stable release tags must point to a commit on master." >&2
+            exit 1
+          fi
+
+      - name: Prepare stable release notes from the changelog
+        if: needs.source.outputs.channel == 'stable'
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          version="${RELEASE_VERSION#v}"
+          python3 - "$version" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          version = sys.argv[1]
+          lines = Path("CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+          heading = re.compile(rf"^## \[{re.escape(version)}\](?:\s+-\s+\d{{4}}-\d{{2}}-\d{{2}})?\s*$")
+          start = next((index for index, line in enumerate(lines) if heading.match(line)), None)
+          if start is None:
+              raise SystemExit(f"Add a dated CHANGELOG.md section for [{version}] before tagging this release.")
+
+          end = next((index for index in range(start + 1, len(lines)) if lines[index].startswith("## ")), len(lines))
+          notes = "\n".join(lines[start + 1:end]).strip()
+          if not notes:
+              raise SystemExit(f"The CHANGELOG.md section for [{version}] is empty.")
+          Path("release-notes.md").write_text(notes + "\n", encoding="utf-8")
+          PY
+
+      - name: Create stable GitHub release
+        if: needs.source.outputs.channel == 'stable'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" release/* --verify-tag --title "$GITHUB_REF_NAME" --notes-file release-notes.md
+
+      - name: Prepare nightly release notes
+        if: needs.source.outputs.channel == 'nightly'
+        id: nightly
+        env:
+          SOURCE_SHA: ${{ needs.source.outputs.sha }}
+        run: |
+          short_sha="${SOURCE_SHA:0:7}"
+          title="Nightly $(date -u +'%Y-%m-%d') ($short_sha)"
+          tag="nightly-${GITHUB_RUN_NUMBER}-${short_sha}-attempt-${GITHUB_RUN_ATTEMPT}"
+          {
+            echo "Automated prerelease built from the \`nightly\` branch."
+            echo
+            echo "Commit: \`$SOURCE_SHA\`"
+            echo "Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } > nightly-notes.md
+          echo "title=$title" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Create nightly prerelease
+        if: needs.source.outputs.channel == 'nightly'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NIGHTLY_TAG: ${{ steps.nightly.outputs.tag }}
+          NIGHTLY_TITLE: ${{ steps.nightly.outputs.title }}
+          SOURCE_SHA: ${{ needs.source.outputs.sha }}
+        run: gh release create "$NIGHTLY_TAG" release/* --target "$SOURCE_SHA" --prerelease --title "$NIGHTLY_TITLE" --notes-file nightly-notes.md

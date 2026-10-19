@@ -1079,3 +1079,52 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(92, 187, 131
   .sidebar { width: 235px; flex: none; }
   .sidebar-resize-handle { display: none; }
 }
+
+/* Release channel controls and the compact in-app update prompt. */
+.settings-dialog { max-height: min(90vh, 680px); overflow-y: auto; }
+.update-settings-section { margin-top: 18px; }
+.settings-section > .field-label { display: flex; margin-bottom: 8px; }
+.update-channel-options .theme-option { min-height: 56px; justify-content: center; padding: 10px 30px 10px 11px; }
+.update-channel-options .theme-option-copy { gap: 4px; }
+.update-channel-options .theme-option-copy strong { font-size: 12px; }
+.update-channel-options .theme-option-copy small { display: block; font-size: 10px; }
+.update-channel-options .theme-radio { top: 12px; right: 11px; }
+.update-check-row { display: flex; min-height: 30px; align-items: center; justify-content: space-between; gap: 12px; margin-top: 9px; }
+.update-check-message { min-width: 0; color: #7b898d; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.update-check-message.is-error { color: #a84f49; }
+.update-check-button { flex: 0 0 auto; min-height: 28px; padding: 0 9px; color: #58676b; background: #fff; border: 1px solid #dfe6e7; border-radius: 4px; font-size: 10px; cursor: pointer; }
+.update-check-button:hover:not(:disabled) { background: #f5f8f6; border-color: #b7d9c1; }
+.update-check-button:disabled { opacity: .58; cursor: wait; }
+.update-alert { position: fixed; z-index: 80; top: 14px; left: 50%; display: flex; width: min(520px, calc(100vw - 28px)); min-height: 58px; align-items: center; gap: 11px; padding: 9px 10px 9px 12px; color: #42514e; background: #fff; border: 1px solid #dce8df; border-radius: 8px; box-shadow: 0 8px 32px rgba(22, 44, 34, .16); transform: translateX(-50%); }
+.update-alert-mark { display: grid; flex: 0 0 30px; width: 30px; height: 30px; place-items: center; color: #277047; background: #eaf7ee; border-radius: 7px; }
+.update-alert.has-error .update-alert-mark { color: #a84f49; background: #fff0ed; }
+.update-alert-mark svg { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.update-alert-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
+.update-alert-copy strong { color: #283a32; font-size: 12px; font-weight: 600; }
+.update-alert-copy small { color: #7c8985; font-size: 10px; }
+.update-now-button { display: inline-flex; min-height: 32px; flex: 0 0 auto; align-items: center; justify-content: center; gap: 7px; padding: 0 11px; color: #193a28; background: #a1e6b7; border: 1px solid #8bd8a5; border-radius: 5px; font-size: 10px; font-weight: 600; cursor: pointer; }
+.update-now-button:hover:not(:disabled) { background: #b1edc4; }
+.update-now-button:disabled { cursor: wait; }
+.update-dismiss { display: grid; flex: 0 0 24px; width: 24px; height: 24px; place-items: center; color: #85918e; background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
+.update-dismiss:hover { color: #40504a; background: #f1f5f2; }
+.update-dismiss svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+:root[data-theme="dark"] .update-check-message { color: #a0aeaf; }
+:root[data-theme="dark"] .update-check-message.is-error { color: #f1b7b0; }
+:root[data-theme="dark"] .update-check-button { color: #c0ccca; background: #1b272a; border-color: #3a484b; }
+:root[data-theme="dark"] .update-check-button:hover:not(:disabled) { background: #243235; border-color: #45634d; }
+:root[data-theme="dark"] .update-alert { color: #dce6e2; background: #1a2528; border-color: #344246; box-shadow: 0 8px 32px rgba(0, 0, 0, .45); }
+:root[data-theme="dark"] .update-alert-mark { color: #a2d9af; background: #20362a; }
+:root[data-theme="dark"] .update-alert.has-error .update-alert-mark { color: #f1b7b0; background: #3a2826; }
+:root[data-theme="dark"] .update-alert-copy strong { color: #e0e9e6; }
+:root[data-theme="dark"] .update-alert-copy small { color: #a0acad; }
+:root[data-theme="dark"] .update-now-button { color: #183322; background: #91dba8; border-color: #74ca91; }
+:root[data-theme="dark"] .update-now-button:hover:not(:disabled) { background: #a4eab8; }
+:root[data-theme="dark"] .update-dismiss { color: #9ba8aa; }
+:root[data-theme="dark"] .update-dismiss:hover { color: #e3ece8; background: #263437; }
+
+@media (max-width: 560px) {
+  .update-alert { top: 8px; gap: 7px; padding: 8px; }
+  .update-alert-mark { flex-basis: 26px; width: 26px; height: 26px; }
+  .update-alert-copy strong { font-size: 11px; }
+  .update-now-button { min-height: 30px; padding: 0 8px; font-size: 9px; }
+}
