@@ -92,7 +92,13 @@ jobs:
       - name: Install NSIS
         if: matrix.platform == 'windows'
         shell: pwsh
-        run: choco install nsis --no-progress --yes
+        run: |
+          choco install nsis --no-progress --yes
+          $nsisPath = Join-Path ${env:ProgramFiles(x86)} 'NSIS'
+          if (-not (Test-Path (Join-Path $nsisPath 'makensis.exe'))) {
+            throw "NSIS was installed, but makensis.exe was not found in $nsisPath"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $nsisPath
 
       - name: Add Go tools to PATH (Linux)
         if: matrix.platform == 'linux'
