@@ -4,6 +4,17 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-19
+
+### Added
+
+- Horizontally scrollable full values for selected table cells.
+- Focus highlighting and Ctrl+A selection scoped to the focused cell's value.
+
+### Fixed
+
+- Replaced the Windows updater's hidden PowerShell command with a native helper process.
+
 ## [1.0.1] - 2026-10-19
 
 ### Added
