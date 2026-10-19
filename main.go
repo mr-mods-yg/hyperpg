@@ -4,6 +4,7 @@ import (
 	"embed"
 
 	"log"
+	"os"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -21,6 +22,13 @@ var appIcon []byte
 
 // main function serves as the application's entry point.
 func main() {
+	if handled, err := runUpdaterHelper(os.Args[1:]); handled {
+		if err != nil {
+			log.Printf("Update helper failed: %v", err)
+		}
+		return
+	}
+
 	postgresService, err := NewPostgresService()
 	if err != nil {
 		log.Fatal(err)
