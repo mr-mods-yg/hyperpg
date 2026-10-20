@@ -62,6 +62,21 @@ Happy coding with Wails3! If you encounter any issues or have questions, don't h
 
 Notable changes are tracked in [CHANGELOG.md](CHANGELOG.md), using the [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) format and Semantic Versioning.
 
+## Working with table data
+
+- Select cells by clicking or dragging. Shift extends a range, Ctrl/Cmd toggles individual cells, and clicking a row number selects the row. Arrow keys move the active cell; Shift+arrow extends the selection. Ctrl/Cmd+A selects the current page.
+- Ctrl/Cmd+C or **Copy CSV** copies selected values as CSV with quoted commas, quotes, and line breaks. Disjoint selections retain their positions inside the selected rectangle; unselected fields and NULL values are empty. Column headers are omitted.
+- Double-click a cell or press Enter/F2 to edit. Enter finishes editing, Shift+Enter inserts a line break, and Escape cancels the current cell edit. Generated columns are read-only.
+- **Save changes** (Ctrl/Cmd+S) applies the draft in one transaction. **Discard changes** restores the loaded page. Changes stay local until saved, and navigation asks how to handle an unsaved draft. A save failure keeps the draft available for correction.
+- Right-click for **Add row**, **Duplicate row**, **Delete row**, **Restore deleted rows**, **Set NULL**, and **Revert cell**. Deletion applies to all rows containing selected cells. New rows use PostgreSQL defaults for untouched cells. Duplicates copy editable values and let PostgreSQL generate identity/sequence values again.
+- Saves check the original row version, including tables without primary keys. If another session changes a row, the entire save rolls back; discard and refresh to load its latest value.
+
+## Validation
+
+Run `npm ci`, `npm test`, and `npm run build` in `frontend`. Install the browser once with `npx playwright install chromium`, then run `npm run test:e2e` for grid and clipboard interaction checks. Browser tests replace the desktop IPC boundary with test fixtures.
+
+Set `HYPERPG_TEST_DATABASE_URL` to a disposable PostgreSQL database and run `go test -tags server ./...` after building the frontend. Integration tests create and remove their own schemas and cover exact values, mixed saves, rollback, concurrent changes, and duplicate/partitioned rows. Without the variable, PostgreSQL integration tests are skipped. The release workflow runs both suites against PostgreSQL before building release assets.
+
 ## Release branches
 
 - `master` is the stable line. Stable releases are created from version tags such as `v1.0.0` on commits reachable from `master`.

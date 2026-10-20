@@ -1136,3 +1136,39 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(92, 187, 131
 .data-grid td:focus { position: relative; z-index: 1; background: #eaf6ed; box-shadow: inset 0 0 0 2px #82c596; }
 :root[data-theme="dark"] .data-grid td.is-expanded .cell-value-scroll { scrollbar-color: #53645c transparent; }
 :root[data-theme="dark"] .data-grid td:focus { background: #203329; box-shadow: inset 0 0 0 2px #6eaa7e; }
+
+/* Cell selection and a staged, transactional table editor. */
+.editable-grid { display: flex; flex: 1; min-height: 0; flex-direction: column; }
+.grid-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; font-size: 11px; }
+.grid-selection-count { margin-left: auto; color: var(--muted); font-size: 10px; }
+.grid-change-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; margin-bottom: 8px; color: var(--ink); background: var(--mint-pale); border: 1px solid var(--line-strong); border-radius: 5px; font-size: 11px; }
+.grid-change-bar > span { flex: 1; min-width: 120px; }
+.grid-change-bar button { min-height: 28px; font-size: 10px; }
+.grid-feedback { flex: 0 0 auto; min-height: 25px; padding: 6px 0; color: var(--muted); font-size: 10px; }
+.selectable-grid { user-select: none; }
+.selectable-grid th { position: sticky; top: 0; z-index: 2; }
+.selectable-grid th.row-index-heading { z-index: 3; }
+.selectable-grid td[role="gridcell"] { position: relative; cursor: cell; outline: none; touch-action: pan-x pan-y; }
+.selectable-grid .row-index { cursor: pointer; }
+.selectable-grid td.is-active .cell-value-scroll { overflow-x: auto; scrollbar-width: thin; }
+.selectable-grid td.is-active .cell-value-scroll > * { width: max-content; max-width: none; text-overflow: clip; }
+.selectable-grid td.is-changed::after { position: absolute; top: 0; right: 0; width: 0; height: 0; border-top: 6px solid #d69a23; border-left: 6px solid transparent; content: ""; }
+.selectable-grid tbody tr.is-added td { background: #edfaf2; }
+.selectable-grid tbody tr.is-deleted td { color: #ae6764; background: #fff0ef; text-decoration: line-through; opacity: .75; }
+.selectable-grid tbody tr td.is-selected { background: #d6f4e5; }
+.selectable-grid tbody tr td.is-active { box-shadow: inset 0 0 0 2px #27a979; }
+.selectable-grid tbody tr td.is-editing { min-width: 180px; padding: 0; overflow: visible; background: var(--white); }
+.grid-cell-editor { display: block; width: 100%; min-width: 180px; min-height: 58px; max-height: 200px; margin: 0; padding: 7px 10px; color: var(--ink); background: var(--white); border: 2px solid #27a979; outline: none; resize: vertical; font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; user-select: text; }
+.grid-context-menu { position: fixed; z-index: 90; display: flex; width: 222px; max-height: calc(100vh - 16px); flex-direction: column; padding: 5px; overflow-y: auto; color: var(--ink); background: var(--white); border: 1px solid var(--line-strong); border-radius: 6px; box-shadow: var(--shadow-modal); }
+.grid-context-menu button { width: 100%; min-height: 30px; padding: 6px 9px; color: inherit; background: transparent; border: 0; border-radius: 3px; text-align: left; font-size: 11px; cursor: pointer; }
+.grid-context-menu button:hover:not(:disabled), .grid-context-menu button:focus-visible { background: var(--mint-pale); outline: none; }
+.grid-context-menu button:disabled { opacity: .4; cursor: default; }
+.grid-context-menu .danger-action { color: var(--danger); }
+.grid-context-menu hr { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
+.unsaved-dialog { width: min(540px, calc(100vw - 28px)); }
+.unsaved-dialog p { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.unsaved-dialog .dialog-actions { flex-wrap: wrap; }
+:root[data-theme="dark"] .selectable-grid tbody tr.is-added td { background: #193328; }
+:root[data-theme="dark"] .selectable-grid tbody tr.is-deleted td { color: #e3a9a3; background: #382523; }
+:root[data-theme="dark"] .selectable-grid tbody tr td.is-selected { background: #214f3d; }
+:root[data-theme="dark"] .selectable-grid tbody tr td.is-active { box-shadow: inset 0 0 0 2px #49d49e; }

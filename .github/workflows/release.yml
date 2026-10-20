@@ -18,6 +18,55 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify:
+    needs: source
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: hyperpg_test
+          POSTGRES_PASSWORD: hyperpg_test
+          POSTGRES_DB: hyperpg_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      HYPERPG_TEST_DATABASE_URL: postgres://hyperpg_test:hyperpg_test@localhost:5432/hyperpg_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.source.outputs.sha }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies and browser
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Install backend build libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+      - name: Check frontend and grid behavior
+        working-directory: frontend
+        run: |
+          npm run build
+          npm test
+          npm run test:e2e
+      - name: Check PostgreSQL mutations and transaction rollback
+        run: go test -tags server ./...
+
   source:
     runs-on: ubuntu-24.04
     outputs:
@@ -44,7 +93,7 @@ jobs:
           fi
 
   build:
-    needs: source
+    needs: [source, verify]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false

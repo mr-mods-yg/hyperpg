@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { PostgresService, UpdateService } from '../bindings/changeme'
+import DataGrid, { type DataGridHandle } from './DataGrid'
+import type { TableData } from './grid'
 
 type ConnectionInfo = {
   id: string
@@ -10,8 +12,6 @@ type ConnectionInfo = {
 }
 
 type TableInfo = { schema: string; name: string }
-type ColumnInfo = { name: string; dataType: string }
-type TableData = { columns: ColumnInfo[]; rows: unknown[][]; rowCount: number }
 type View = 'data' | 'structure'
 type Theme = 'light' | 'dark'
 type UpdateChannel = 'stable' | 'nightly'
@@ -27,7 +27,10 @@ function App() {
   const [tables, setTables] = useState<TableInfo[]>([])
   const [selectedTable, setSelectedTable] = useState<TableInfo | null>(null)
   const [tableData, setTableData] = useState<TableData | null>(null)
-  const [expandedCell, setExpandedCell] = useState('')
+  const gridRef = useRef<DataGridHandle>(null)
+  const [hasPendingChanges, setHasPendingChanges] = useState(false)
+  const [savingChanges, setSavingChanges] = useState(false)
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
   const [tablesLoading, setTablesLoading] = useState(false)
   const [tableLoading, setTableLoading] = useState(false)
   const [tablesError, setTablesError] = useState('')
@@ -197,14 +200,6 @@ function App() {
     return tables.filter((table) => `${table.schema}.${table.name}`.toLowerCase().includes(query))
   }, [tables, tableSearch])
 
-  const filteredRows = useMemo(() => {
-    if (!tableData) return []
-    const query = rowSearch.trim().toLowerCase()
-    return tableData.rows
-      .map((row, index) => ({ row, index }))
-      .filter(({ row }) => !query || row.some((value) => formatValue(value).toLowerCase().includes(query)))
-  }, [tableData, rowSearch])
-
   const pageStart = tableData?.rows.length ? pageOffset + 1 : 0
   const pageEnd = tableData ? Math.min(pageOffset + tableData.rows.length, tableData.rowCount) : 0
 
@@ -252,6 +247,7 @@ function App() {
             columns: result.columns ?? [],
             rows: (result.rows ?? []).map((row) => row ?? []),
             rowCount: result.rowCount ?? 0,
+            identities: result.identities ?? [],
           })
         }
       })
@@ -265,13 +261,27 @@ function App() {
     return () => { cancelled = true }
   }, [selectedConnectionId, selectedTable?.schema, selectedTable?.name, pageSize, pageOffset, refreshKey])
 
-  const openConnectionDialog = () => {
+  const guardNavigation = (action: () => void) => {
+    if (savingChanges) return
+    if (hasPendingChanges) setPendingNavigation(() => action)
+    else action()
+  }
+
+  const resolveNavigation = async (save: boolean) => {
+    if (save && !(await gridRef.current?.save())) { setPendingNavigation(null); return }
+    if (!save) gridRef.current?.discard()
+    const action = pendingNavigation
+    setPendingNavigation(null)
+    action?.()
+  }
+
+  const openConnectionDialog = () => guardNavigation(() => {
     setConnectionError('')
     setConnectionUrl('')
     setConnectionName('')
     setShowUrl(false)
     setShowConnectionDialog(true)
-  }
+  })
 
   const handleInstallUpdate = async () => {
     setInstallingUpdate(true)
@@ -310,7 +320,9 @@ function App() {
     }
   }
 
-  const selectConnection = async (connectionId: string) => {
+  const selectConnection = (connectionId: string) => guardNavigation(() => { void openConnection(connectionId) })
+
+  const openConnection = async (connectionId: string) => {
     setOpeningConnectionId(connectionId)
     setSavedConnectionsError('')
     try {
@@ -330,7 +342,9 @@ function App() {
     }
   }
 
-  const removeConnection = async (connection: ConnectionInfo) => {
+  const removeConnection = (connection: ConnectionInfo) => guardNavigation(() => { void deleteConnection(connection) })
+
+  const deleteConnection = async (connection: ConnectionInfo) => {
     try {
       await PostgresService.DeleteSavedConnection(connection.id)
     } catch (error) {
@@ -346,11 +360,11 @@ function App() {
       setRowSearch('')
       setCollapsedSchemas({})
       setExpandedTableKey('')
-      if (remaining[0]) void selectConnection(remaining[0].id)
+      if (remaining[0]) void openConnection(remaining[0].id)
     }
   }
 
-  const selectTable = (table: TableInfo) => {
+  const selectTable = (table: TableInfo) => guardNavigation(() => {
     setSelectedTable(table)
     setPageOffset(0)
     setRowSearch('')
@@ -358,7 +372,7 @@ function App() {
     setCollapsedSchemas((current) => current[table.schema] ? { ...current, [table.schema]: false } : current)
     setView('data')
     setMobileNavOpen(false)
-  }
+  })
 
   const toggleSchema = (schema: string) => {
     setCollapsedSchemas((current) => ({ ...current, [schema]: !current[schema] }))
@@ -514,7 +528,7 @@ function App() {
                 <h1>{activeConnection.name}</h1>
                 <div className="database-meta">{activeConnection.host}<span className="meta-divider" />{tables.length} tables</div>
               </div>
-              <button className="quiet-action" type="button" aria-label="Refresh" title="Refresh" onClick={() => setRefreshKey((value) => value + 1)}>
+              <button className="quiet-action" type="button" aria-label="Refresh" title="Refresh" onClick={() => guardNavigation(() => setRefreshKey((value) => value + 1))}>
                 <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M14.8 5.1A6.5 6.5 0 1 0 15.5 9M14.8 5.1V1.8M14.8 5.1h-3.3" /></svg>
               </button>
             </section>
@@ -525,7 +539,7 @@ function App() {
               <div className="workspace-tabs" role="tablist" aria-label="Database views">
                 {selectedTable ? <div className="view-switcher" role="tablist" aria-label="Table view">
                   <button type="button" role="tab" aria-selected={view === 'data'} className={view === 'data' ? 'is-selected' : ''} onClick={() => setView('data')}>Data</button>
-                  <button type="button" role="tab" aria-selected={view === 'structure'} className={view === 'structure' ? 'is-selected' : ''} onClick={() => setView('structure')}>Structure</button>
+                  <button type="button" role="tab" aria-selected={view === 'structure'} className={view === 'structure' ? 'is-selected' : ''} onClick={() => guardNavigation(() => setView('structure'))}>Structure</button>
                 </div> : null}
               </div>
 
@@ -564,53 +578,34 @@ function App() {
                       <label className="row-search"><svg viewBox="0 0 18 18" fill="none"><circle cx="8" cy="8" r="5.4" /><path d="m12 12 3.2 3.2" /></svg><input value={rowSearch} onChange={(event) => setRowSearch(event.target.value)} placeholder="Search this page" aria-label="Search this page" /></label>
                     </div>
                     {tableError ? <div className="notice notice-error">{tableError}</div> : null}
-                    {tableLoading ? <div className="table-loading"><span className="spinner" />Loading rows…</div> : tableData ? <div className="data-grid-wrap">
-                      {tableData.columns.length === 0 ? <div className="empty-table">This table has no columns.</div> : filteredRows.length === 0 ? <div className="empty-table">{rowSearch ? 'No rows match your search.' : 'This table has no rows yet.'}</div> : <div className="data-grid-scroll"><table className="data-grid">
-                        <thead><tr><th className="row-index-heading">#</th>{tableData.columns.map((column) => <th key={column.name}><span>{column.name}</span><small>{column.dataType}</small></th>)}</tr></thead>
-                        <tbody>{filteredRows.map(({ row, index }) => <tr key={index}><td className="row-index">{pageOffset + index + 1}</td>{row.map((value, columnIndex) => {
-                          const cellId = `${selectedTable.schema}.${selectedTable.name}:${index}:${columnIndex}`
-                          const isExpanded = expandedCell === cellId
-                          return <td key={`${index}-${columnIndex}`} className={isExpanded ? 'is-expanded' : ''} tabIndex={0} onClick={(event) => {
-                            event.currentTarget.focus()
-                            setExpandedCell(isExpanded ? '' : cellId)
-                          }} onKeyDown={(event) => {
-                            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
-                              event.preventDefault()
-                              const valueContainer = event.currentTarget.querySelector('.cell-value-scroll')
-                              if (valueContainer) {
-                                const range = document.createRange()
-                                range.selectNodeContents(valueContainer)
-                                window.getSelection()?.removeAllRanges()
-                                window.getSelection()?.addRange(range)
-                              }
-                              return
-                            }
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault()
-                              setExpandedCell(isExpanded ? '' : cellId)
-                            }
-                          }} aria-label={`Row ${pageOffset + index + 1}, ${tableData.columns[columnIndex]?.name ?? `column ${columnIndex + 1}`}: ${formatValue(value)}`}><div className="cell-value-scroll"><CellValue value={value} /></div></td>
-                        })}</tr>)}</tbody>
-                      </table></div>}
-                    </div> : null}
+                    {tableLoading ? <div className="table-loading"><span className="spinner" />Loading rows…</div> : tableData ? <DataGrid
+                      key={`${selectedConnectionId}:${selectedTable.schema}:${selectedTable.name}:${pageOffset}:${pageSize}:${refreshKey}`}
+                      ref={gridRef} data={tableData} connectionID={selectedConnectionId} schema={selectedTable.schema} table={selectedTable.name}
+                      pageOffset={pageOffset} search={rowSearch} onDirtyChange={setHasPendingChanges} onSavingChange={setSavingChanges}
+                      onSaved={(rowCountDelta) => {
+                        const remainingCount = Math.max(0, tableData.rowCount + rowCountDelta)
+                        setPageOffset((offset) => Math.min(offset, Math.max(0, Math.ceil(remainingCount / pageSize) - 1) * pageSize))
+                        setRefreshKey((value) => value + 1)
+                      }}
+                    /> : null}
                     {tableData ? <div className="grid-pagination">
-                      <label className="page-size-control"><span>Rows per page</span><select aria-label="Rows per page" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPageOffset(0) }}>
+                      <label className="page-size-control"><span>Rows per page</span><select aria-label="Rows per page" value={pageSize} disabled={savingChanges} onChange={(event) => { const size = Number(event.target.value); guardNavigation(() => { setPageSize(size); setPageOffset(0) }) }}>
                         {[25, 50, 100, 250, 500].map((size) => <option key={size} value={size}>{size}</option>)}
                       </select></label>
                       <span className="pagination-range">{pageStart.toLocaleString()}–{pageEnd.toLocaleString()} of {tableData.rowCount.toLocaleString()}</span>
                       <div className="pagination-actions">
-                        <button className="pagination-button" type="button" aria-label="Previous page" disabled={tableLoading || pageOffset === 0} onClick={() => setPageOffset((offset) => Math.max(0, offset - pageSize))}>Previous</button>
-                        <button className="pagination-button" type="button" aria-label="Next page" disabled={tableLoading || pageOffset + pageSize >= tableData.rowCount} onClick={() => setPageOffset((offset) => offset + pageSize)}>Next</button>
+                        <button className="pagination-button" type="button" aria-label="Previous page" disabled={tableLoading || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset((offset) => Math.max(0, offset - pageSize)))}>Previous</button>
+                        <button className="pagination-button" type="button" aria-label="Next page" disabled={tableLoading || savingChanges || pageOffset + pageSize >= tableData.rowCount} onClick={() => guardNavigation(() => setPageOffset((offset) => offset + pageSize))}>Next</button>
                       </div>
                     </div> : null}
                   </> : <>
                     <div className="structure-intro"><h3>Columns</h3><span>{tableData?.columns.length ?? 0} total</span></div>
-                    {tableLoading ? <div className="table-loading"><span className="spinner" />Loading structure…</div> : tableData ? <div className="structure-table-wrap"><table className="structure-table"><thead><tr><th>Column</th><th>Type</th><th>Nullable</th></tr></thead><tbody>{tableData.columns.map((column, index) => <tr key={column.name}><td><span className="column-order">{String(index + 1).padStart(2, '0')}</span><strong>{column.name}</strong></td><td><code>{column.dataType}</code></td><td><span className="nullable-value">Yes</span></td></tr>)}</tbody></table></div> : null}
+                    {tableLoading ? <div className="table-loading"><span className="spinner" />Loading structure…</div> : tableData ? <div className="structure-table-wrap"><table className="structure-table"><thead><tr><th>Column</th><th>Type</th><th>Nullable</th></tr></thead><tbody>{tableData.columns.map((column, index) => <tr key={column.name}><td><span className="column-order">{String(index + 1).padStart(2, '0')}</span><strong>{column.name}</strong></td><td><code>{column.dataType}</code></td><td><span className="nullable-value">{column.nullable ? 'Yes' : 'No'}</span></td></tr>)}</tbody></table></div> : null}
                   </>}
                 </div>
               )}
             </section>
-            <footer className="main-footer"><span><span className="footer-led" />Connected to {activeConnection.database}</span><span>Read-only table browser</span></footer>
+            <footer className="main-footer"><span><span className="footer-led" />Connected to {activeConnection.database}</span><span>Changes apply when saved</span></footer>
           </div>
         ) : (
           <div className="welcome-area">
@@ -637,9 +632,30 @@ function App() {
       {updateInfo?.available && dismissedUpdate !== updateInfo.version && !showSettingsDialog && !showConnectionDialog ? <aside className={`update-alert ${updateInstallError ? 'has-error' : ''}`} role="alert">
         <span className="update-alert-mark" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none"><path d="M9 2.2v8.2m0 3.4v.1M4.2 15.3h9.6" /><path d="m5.7 6.4 3.3-3.3 3.3 3.3" /></svg></span>
         <span className="update-alert-copy"><strong>{updateInstallError ? 'Update could not start' : 'Update available'}</strong><small>{updateInstallError || `${updateInfo.version} · ${updateChannel === 'stable' ? 'Stable' : 'Nightly'}`}</small></span>
-        <button className="update-now-button" type="button" onClick={() => void handleInstallUpdate()} disabled={installingUpdate}>{installingUpdate ? <><span className="button-spinner" />Restarting</> : 'Update now'}</button>
+        <button className="update-now-button" type="button" onClick={() => guardNavigation(() => { void handleInstallUpdate() })} disabled={installingUpdate}>{installingUpdate ? <><span className="button-spinner" />Restarting</> : 'Update now'}</button>
         <button className="update-dismiss" type="button" aria-label="Dismiss update notice" onClick={() => setDismissedUpdate(updateInfo.version)}><svg viewBox="0 0 18 18" fill="none"><path d="m4 4 10 10M14 4 4 14" /></svg></button>
       </aside> : null}
+
+      {pendingNavigation ? <div className="modal-backdrop" role="presentation">
+        <section className="connection-dialog unsaved-dialog" role="dialog" aria-modal="true" aria-labelledby="unsaved-title" onKeyDown={(event) => {
+          if (event.key === 'Escape' && !savingChanges) setPendingNavigation(null)
+          if (event.key === 'Tab') {
+            const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
+            const first = buttons[0], last = buttons[buttons.length - 1]
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+          }
+        }}>
+          <div className="dialog-heading"><h2 id="unsaved-title">Unsaved changes</h2></div>
+          <p>Save your table changes before continuing, or discard the draft.</p>
+          <div className="dialog-actions">
+            <button type="button" className="cancel-button" autoFocus disabled={savingChanges} onClick={() => setPendingNavigation(null)}>Keep editing</button>
+            <button type="button" className="cancel-button" disabled={savingChanges} onClick={() => void resolveNavigation(false)}>Discard and continue</button>
+            <button type="button" className="connect-button" disabled={savingChanges} onClick={() => void resolveNavigation(true)}>{savingChanges ? 'Saving…' : 'Save and continue'}</button>
+          </div>
+          {tableError ? <div role="alert">{tableError}</div> : null}
+        </section>
+      </div> : null}
 
       {showConnectionDialog ? <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !connecting) setShowConnectionDialog(false) }}>
         <section className="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
@@ -705,18 +721,6 @@ function App() {
 
 function DatabaseIcon() {
   return <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><ellipse cx="10" cy="4.5" rx="6.5" ry="2.5" /><path d="M3.5 4.5v5c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5v-5M3.5 9.5v5c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5v-5" /><path d="M3.5 9.5C3.5 10.9 6.4 12 10 12s6.5-1.1 6.5-2.5" /></svg>
-}
-
-function CellValue({ value }: { value: unknown }) {
-  if (value === null || value === undefined) return <span className="null-value">NULL</span>
-  if (typeof value === 'boolean') return <span className={`boolean-value ${value ? 'is-true' : 'is-false'}`}>{String(value)}</span>
-  if (typeof value === 'object') return <span className="json-value">{JSON.stringify(value)}</span>
-  return <span className="cell-text" title={String(value)}>{String(value)}</span>
-}
-
-function formatValue(value: unknown) {
-  if (value === null || value === undefined) return 'null'
-  return typeof value === 'object' ? JSON.stringify(value) : String(value)
 }
 
 function errorMessage(error: unknown, fallback: string) {
