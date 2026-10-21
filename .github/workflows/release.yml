@@ -18,6 +18,55 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify:
+    needs: source
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: hyperpg_test
+          POSTGRES_PASSWORD: hyperpg_test
+          POSTGRES_DB: hyperpg_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      HYPERPG_TEST_DATABASE_URL: postgres://hyperpg_test:hyperpg_test@localhost:5432/hyperpg_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.source.outputs.sha }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies and browser
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Install backend build libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+      - name: Check frontend and grid behavior
+        working-directory: frontend
+        run: |
+          npm run build
+          npm test
+          npm run test:e2e
+      - name: Check PostgreSQL mutations and transaction rollback
+        run: go test -tags server ./...
+
   source:
     runs-on: ubuntu-24.04
     outputs:
@@ -44,7 +93,7 @@ jobs:
           fi
 
   build:
-    needs: source
+    needs: [source, verify]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -84,21 +133,22 @@ jobs:
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
 
-      - name: Add Go tools to PATH (Windows)
-        if: matrix.platform == 'windows'
-        shell: pwsh
-        run: Add-Content -Path $env:GITHUB_PATH -Value (Join-Path (go env GOPATH) 'bin')
-
       - name: Install NSIS
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          choco install nsis --no-progress --yes
-          $nsisPath = Join-Path ${env:ProgramFiles(x86)} 'NSIS'
-          if (-not (Test-Path (Join-Path $nsisPath 'makensis.exe'))) {
-            throw "NSIS was installed, but makensis.exe was not found in $nsisPath"
+          choco install nsis --yes --no-progress
+          $nsisDir = Join-Path ${env:ProgramFiles(x86)} 'NSIS'
+          $makensis = Join-Path $nsisDir 'makensis.exe'
+          if (!(Test-Path $makensis)) {
+            throw "NSIS was installed, but makensis.exe was not found at $makensis"
           }
-          Add-Content -Path $env:GITHUB_PATH -Value $nsisPath
+          Add-Content -Path $env:GITHUB_PATH -Value $nsisDir
+
+      - name: Add Go tools to PATH (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: Add-Content -Path $env:GITHUB_PATH -Value (Join-Path (go env GOPATH) 'bin')
 
       - name: Add Go tools to PATH (Linux)
         if: matrix.platform == 'linux'
@@ -117,17 +167,24 @@ jobs:
           APP_VERSION: ${{ needs.source.outputs.version }}
         run: printf '%s' "$APP_VERSION" > VERSION
 
-      - name: Build application
+      - name: Build Linux application
+        if: matrix.platform == 'linux'
         run: wails3 build
 
-      - name: Package Windows executable
+      - name: Package Windows installer
         if: matrix.platform == 'windows'
         shell: pwsh
+        env:
+          APP_VERSION: ${{ needs.source.outputs.version }}
         run: |
+          if ($env:APP_VERSION -match '^v?(\d+)\.(\d+)\.(\d+)$') {
+            $installerVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3])"
+          } else {
+            $installerVersion = "0.0.$env:GITHUB_RUN_NUMBER"
+          }
+          wails3 task windows:package ARCH=amd64 INSTALL_SCOPE=user PRODUCT_VERSION=$installerVersion
           New-Item -ItemType Directory -Path release -Force | Out-Null
-          Copy-Item bin\hyperpg.exe release\hyperpg-windows-amd64.exe
-          wails3 task windows:package ARCH=amd64 INSTALL_SCOPE=user
-          Copy-Item bin\hyperpg-amd64-installer.exe release\hyperpg-windows-amd64-installer.exe
+          Copy-Item bin\hyperpg-amd64-installer.exe release\hyperpg-windows-amd64-setup.exe
 
       - name: Package Linux executable
         if: matrix.platform == 'linux'

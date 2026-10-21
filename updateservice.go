@@ -30,9 +30,10 @@ const maxUpdateDownloadSize = 512 << 20
 var embeddedVersion string
 
 type UpdateInfo struct {
-	Available  bool   `json:"available"`
-	Version    string `json:"version"`
-	ReleaseURL string `json:"releaseUrl"`
+	Available    bool   `json:"available"`
+	Version      string `json:"version"`
+	ReleaseURL   string `json:"releaseUrl"`
+	InstallError string `json:"installError"`
 }
 
 type UpdateService struct {
@@ -78,7 +79,10 @@ func (s *UpdateService) CheckForUpdates(channel string) (UpdateInfo, error) {
 	release, err := s.latestRelease(channel)
 	if err != nil {
 		if errors.Is(err, errNoPublishedRelease) {
-			return UpdateInfo{Available: false}, nil
+			return addPersistedUpdateError(UpdateInfo{Available: false}), nil
+		}
+		if persistedError := persistedUpdateError(); persistedError != "" {
+			return UpdateInfo{InstallError: persistedError}, nil
 		}
 		return UpdateInfo{}, err
 	}
@@ -86,11 +90,23 @@ func (s *UpdateService) CheckForUpdates(channel string) (UpdateInfo, error) {
 		return UpdateInfo{}, fmt.Errorf("This release has no build for %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 	available, version := releaseIsNewer(channel, release.TagName, currentAppVersion())
-	return UpdateInfo{Available: available, Version: version, ReleaseURL: release.HTMLURL}, nil
+	return addPersistedUpdateError(UpdateInfo{Available: available, Version: version, ReleaseURL: release.HTMLURL}), nil
 }
 
-// InstallUpdate downloads and verifies the selected release, replaces this
-// executable, and restarts the app after it has shut down.
+func addPersistedUpdateError(info UpdateInfo) UpdateInfo {
+	info.InstallError = persistedUpdateError()
+	return info
+}
+
+func persistedUpdateError() string {
+	if executable, err := os.Executable(); err == nil {
+		return readUpdateError(executable)
+	}
+	return ""
+}
+
+// InstallUpdate downloads and verifies the selected release, then installs it
+// and restarts the app after it has shut down.
 func (s *UpdateService) InstallUpdate(channel string) error {
 	s.mu.Lock()
 	if s.installing {
@@ -233,7 +249,11 @@ func (s *UpdateService) downloadAsset(asset githubAsset) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("Could not locate the current application: %w", err)
 	}
-	staged, err := os.CreateTemp(filepath.Dir(executable), ".hyperpg-update-*")
+	tempPattern := ".hyperpg-update-*"
+	if runtime.GOOS == "windows" {
+		tempPattern += ".exe"
+	}
+	staged, err := os.CreateTemp(filepath.Dir(executable), tempPattern)
 	if err != nil {
 		return "", fmt.Errorf("Could not write an update next to the app. Move hyperpg to a folder you can write to, then try again: %w", err)
 	}
@@ -329,7 +349,7 @@ func extractLinuxBinary(archivePath, targetDir string) (string, error) {
 func platformAssetName() string {
 	switch {
 	case runtime.GOOS == "windows" && runtime.GOARCH == "amd64":
-		return "hyperpg-windows-amd64.exe"
+		return "hyperpg-windows-amd64-setup.exe"
 	case runtime.GOOS == "linux" && runtime.GOARCH == "amd64":
 		return "hyperpg-linux-amd64.tar.gz"
 	default:

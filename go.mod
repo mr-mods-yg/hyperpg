@@ -6,6 +6,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/wailsapp/wails/v3 v3.0.0-beta.28
 	github.com/zalando/go-keyring v0.2.8
+	golang.org/x/sys v0.47.0
 	modernc.org/sqlite v1.58.0
 )
 
@@ -26,7 +27,6 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.39.0 // indirect
 	modernc.org/libc v1.75.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

@@ -100,9 +100,11 @@ tasks:
       - task: '{{if eq (.FORMAT | default "nsis") "msix"}}create:msix:package{{else}}create:nsis:installer{{end}}'
         vars:
           INSTALL_SCOPE: '{{.INSTALL_SCOPE | default "machine"}}'
+          PRODUCT_VERSION: '{{.PRODUCT_VERSION | default "0.1.0"}}'
     vars:
       FORMAT: '{{.FORMAT | default "nsis"}}'
       INSTALL_SCOPE: '{{.INSTALL_SCOPE | default "machine"}}'
+      PRODUCT_VERSION: '{{.PRODUCT_VERSION | default "0.1.0"}}'
 
   generate:syso:
     summary: Generates Windows `.syso` file
@@ -125,14 +127,15 @@ tasks:
       - wails3 generate webview2bootstrapper -dir "{{.ROOT_DIR}}/build/windows/nsis"
       - |
         {{if eq OS "windows"}}
-        makensis {{if eq .INSTALL_SCOPE "user"}}-DWAILS_INSTALL_SCOPE=user -DREQUEST_EXECUTION_LEVEL=user {{end}}-DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe" project.nsi
+        makensis {{if eq .INSTALL_SCOPE "user"}}-DWAILS_INSTALL_SCOPE=user -DREQUEST_EXECUTION_LEVEL=user {{end}}-DINFO_PRODUCTVERSION={{.PRODUCT_VERSION}} -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe" project.nsi
         {{else}}
-        makensis {{if eq .INSTALL_SCOPE "user"}}-DWAILS_INSTALL_SCOPE=user -DREQUEST_EXECUTION_LEVEL=user {{end}}-DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" project.nsi
+        makensis {{if eq .INSTALL_SCOPE "user"}}-DWAILS_INSTALL_SCOPE=user -DREQUEST_EXECUTION_LEVEL=user {{end}}-DINFO_PRODUCTVERSION={{.PRODUCT_VERSION}} -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" project.nsi
         {{end}}
     vars:
       ARCH: '{{.ARCH | default ARCH}}'
       ARG_FLAG: '{{if eq .ARCH "amd64"}}AMD64{{else}}ARM64{{end}}'
       INSTALL_SCOPE: '{{.INSTALL_SCOPE | default "machine"}}'
+      PRODUCT_VERSION: '{{.PRODUCT_VERSION | default "0.1.0"}}'
 
   create:msix:package:
     summary: Creates an MSIX package

@@ -4,19 +4,20 @@ HyperPG is a lightweight desktop client for browsing PostgreSQL databases. Paste
 
 ## Download
 
-The latest stable release is **[v1.0.1](https://github.com/mr-mods-yg/hyperpg/releases/tag/v1.0.1)**. Download the build for your system:
+The latest stable release is **[v1.0.3](https://github.com/mr-mods-yg/hyperpg/releases/tag/v1.0.3)**. Download the build for your system:
 
-- [Windows installer (recommended)](https://github.com/mr-mods-yg/hyperpg/releases/latest/download/hyperpg-windows-amd64-installer.exe)
-- [Windows portable executable](https://github.com/mr-mods-yg/hyperpg/releases/latest/download/hyperpg-windows-amd64.exe)
+- [Windows setup installer](https://github.com/mr-mods-yg/hyperpg/releases/latest/download/hyperpg-windows-amd64-setup.exe)
 - [Linux x64](https://github.com/mr-mods-yg/hyperpg/releases/latest/download/hyperpg-linux-amd64.tar.gz)
 - [All releases, including nightly builds](https://github.com/mr-mods-yg/hyperpg/releases)
 
-The Windows installer sets up HyperPG for the current user, adds Start Menu and desktop shortcuts, and can be removed from Windows Settings. The portable Windows executable needs no installation. On Linux, extract the archive and run `hyperpg`; Linux builds require GTK 4 and WebKitGTK 6.0 at runtime.
+The Windows installer sets up HyperPG for the current user, adds Start Menu and desktop shortcuts, and can be removed from Windows Settings. On Linux, extract the archive and run `hyperpg`; Linux builds require GTK 4 and WebKitGTK 6.0 at runtime.
 
 ## Features
 
-- Browse database schemas, tables, columns, and rows. HyperPG's table browser is read-only.
+- Browse database schemas, tables, columns, and rows, and edit table data with staged, transactional saves.
 - Page through table rows and choose how many rows to display.
+- Select multiple cells and copy them as CSV.
+- Add, duplicate, delete, restore, and revert rows and cells from the table context menu.
 - Resize the sidebar and collapse schema groups.
 - Switch between light and dark themes.
 - Save connection details locally in SQLite. Connection URLs are encrypted with AES-GCM, using a key held in the operating system's credential store.
@@ -24,7 +25,15 @@ The Windows installer sets up HyperPG for the current user, adds Start Menu and 
 
 ## Update channels
 
-Choose **Stable** or **Nightly** in Settings. Stable releases use version tags on `master`; the nightly channel tracks prereleases built from `nightly`. A new version can be installed from the in-app update alert.
+Choose **Stable** or **Nightly** in Settings. Stable releases use version tags on `master`; the nightly channel tracks prereleases built from `nightly`. A new version can be installed from the in-app update alert. Windows updates use the setup installer and restart HyperPG after installation.
+
+## Working with table data
+
+- Click or drag to select cells. Shift extends a range, Ctrl/Cmd toggles cells, and clicking a row number selects a row. Arrow keys move the active cell; Shift+arrow extends the selection. Ctrl/Cmd+A selects the current page.
+- Ctrl/Cmd+C or **Copy CSV** copies selected values as CSV. Disjoint selections retain their positions inside the selected rectangle; unselected fields and NULL values are empty. Column headers are omitted.
+- Double-click a cell or press Enter/F2 to edit. Enter finishes editing, Shift+Enter inserts a line break, and Escape cancels the current cell edit. Generated columns are read-only.
+- **Save changes** (Ctrl/Cmd+S) applies the draft in one transaction. **Discard changes** restores the loaded page. Navigation asks how to handle an unsaved draft.
+- Right-click to add, duplicate, delete, restore, set NULL, or revert cells. New rows use PostgreSQL defaults for untouched cells.
 
 ## Build from source
 
@@ -48,6 +57,6 @@ wails3 build
 
 - `master` is the stable branch. Stable version tags such as `v1.0.0` must point to a commit on `master`. Before tagging a release, add its dated notes to `CHANGELOG.md` using [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
 - `nightly` is the prerelease branch. Each push creates a nightly release, and the workflow rebuilds its latest commit daily at 02:17 UTC. Set `master` as the repository's default branch so GitHub runs the scheduled workflow.
-- GitHub Actions builds Windows and Linux x64 assets and publishes them on the release page.
+- GitHub Actions builds a Windows setup installer and Linux x64 archive and publishes them on the release page.
 
 See the [changelog](CHANGELOG.md) for release history and the [release workflow](.github/workflows/release.yml) for build details.

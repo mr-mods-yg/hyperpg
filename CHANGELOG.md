@@ -4,6 +4,24 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-10-21
+
+### Added
+
+- Multi-cell selection with drag, Shift, Ctrl/Cmd, arrow keys, and CSV clipboard copying.
+- Editable table cells with staged changes, Save/Discard controls, and unsaved-change navigation prompts.
+- Row context menus for adding, duplicating, deleting, restoring, setting NULL, and reverting cells.
+- Transactional table saves with concurrent-edit detection, including tables without primary keys and partitioned tables.
+- Per-user Windows setup installer used for installation and in-app updates.
+
+### Fixed
+
+- Expand the focus border across selected cells, including separate ranges, without outlining interior cells.
+- Simplify sidebar table navigation to name labels without column dropdowns.
+- Preserve exact large integers, decimal values, arrays, and binary values when reading table data.
+- Display actual column nullability in the Structure view.
+- Install Windows updates reliably, restart the app, and roll back to the previous executable if installation fails.
+
 ## [1.0.2] - 2026-10-19
 
 ### Added

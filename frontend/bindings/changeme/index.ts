@@ -11,6 +11,8 @@ export {
 export type {
     ColumnInfo,
     ConnectionInfo,
+    RowIdentity,
+    TableChange,
     TableData,
     TableInfo,
     UpdateInfo

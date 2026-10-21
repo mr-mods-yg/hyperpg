@@ -37,14 +37,19 @@ type TableInfo struct {
 }
 
 type ColumnInfo struct {
-	Name     string `json:"name"`
-	DataType string `json:"dataType"`
+	Name          string `json:"name"`
+	DataType      string `json:"dataType"`
+	Nullable      bool   `json:"nullable"`
+	HasDefault    bool   `json:"hasDefault"`
+	Generated     bool   `json:"generated"`
+	AutoIncrement bool   `json:"autoIncrement"`
 }
 
 type TableData struct {
-	Columns  []ColumnInfo `json:"columns"`
-	Rows     [][]any      `json:"rows"`
-	RowCount int64        `json:"rowCount"`
+	Columns    []ColumnInfo  `json:"columns"`
+	Rows       [][]any       `json:"rows"`
+	RowCount   int64         `json:"rowCount"`
+	Identities []RowIdentity `json:"identities"`
 }
 
 // Connect opens and verifies a PostgreSQL URL, then saves it securely on this device.
@@ -209,28 +214,10 @@ func (s *PostgresService) GetTableData(connectionID, schema, tableName string, l
 		return TableData{}, fmt.Errorf("That table is no longer available")
 	}
 
-	columnRows, err := db.QueryContext(ctx, `
-		SELECT column_name, data_type
-		FROM information_schema.columns
-		WHERE table_schema = $1 AND table_name = $2
-		ORDER BY ordinal_position`, schema, tableName)
+	columns, err := readTableColumns(ctx, db, schema, tableName)
 	if err != nil {
-		return TableData{}, fmt.Errorf("Could not read table columns: %w", err)
+		return TableData{}, err
 	}
-	columns := make([]ColumnInfo, 0)
-	for columnRows.Next() {
-		var column ColumnInfo
-		if err := columnRows.Scan(&column.Name, &column.DataType); err != nil {
-			columnRows.Close()
-			return TableData{}, fmt.Errorf("Could not read table columns: %w", err)
-		}
-		columns = append(columns, column)
-	}
-	if err := columnRows.Err(); err != nil {
-		columnRows.Close()
-		return TableData{}, fmt.Errorf("Could not read table columns: %w", err)
-	}
-	columnRows.Close()
 
 	quotedTable := pgx.Identifier{schema, tableName}.Sanitize()
 	var rowCount int64
@@ -257,51 +244,54 @@ func (s *PostgresService) GetTableData(connectionID, schema, tableName string, l
 			primaryKeys.Close()
 			return TableData{}, fmt.Errorf("Could not inspect table ordering: %w", err)
 		}
-		orderColumns = append(orderColumns, pgx.Identifier{columnName}.Sanitize())
+		orderColumns = append(orderColumns, pgx.Identifier{"hyperpg_row", columnName}.Sanitize())
 	}
 	if err := primaryKeys.Err(); err != nil {
 		primaryKeys.Close()
 		return TableData{}, fmt.Errorf("Could not inspect table ordering: %w", err)
 	}
 	primaryKeys.Close()
-	orderBy := "ctid"
+	orderBy := `"hyperpg_row".tableoid, "hyperpg_row".ctid`
 	if len(orderColumns) > 0 {
 		orderBy = strings.Join(orderColumns, ", ")
 	}
-	rows, err := db.QueryContext(ctx, "SELECT * FROM "+quotedTable+" ORDER BY "+orderBy+" LIMIT $1 OFFSET $2", limit, offset)
+	// Text preserves bigint/numeric precision, PostgreSQL arrays, bytea and time
+	// values across the JSON bridge. Only edited values are sent back on save.
+	selectColumns := []string{`"hyperpg_row".tableoid::text`, `"hyperpg_row".ctid::text`, `"hyperpg_row".xmin::text`}
+	for _, column := range columns {
+		selectColumns = append(selectColumns, pgx.Identifier{"hyperpg_row", column.Name}.Sanitize()+"::text")
+	}
+	rows, err := db.QueryContext(ctx, "SELECT "+strings.Join(selectColumns, ", ")+" FROM "+quotedTable+` AS "hyperpg_row" ORDER BY `+orderBy+" LIMIT $1 OFFSET $2", limit, offset)
 	if err != nil {
 		return TableData{}, fmt.Errorf("Could not read table rows: %w", err)
 	}
 	defer rows.Close()
 
 	rowsData := make([][]any, 0)
-	columnNames, err := rows.Columns()
-	if err != nil {
-		return TableData{}, fmt.Errorf("Could not read table rows: %w", err)
-	}
+	identities := make([]RowIdentity, 0)
 	for rows.Next() {
-		values := make([]any, len(columnNames))
-		scanTargets := make([]any, len(columnNames))
+		values := make([]any, len(columns)+3)
+		scanTargets := make([]any, len(values))
 		for i := range values {
 			scanTargets[i] = &values[i]
 		}
 		if err := rows.Scan(scanTargets...); err != nil {
 			return TableData{}, fmt.Errorf("Could not read table rows: %w", err)
 		}
-		for i, value := range values {
-			if bytes, ok := value.([]byte); ok {
-				values[i] = string(bytes)
-			} else if timestamp, ok := value.(time.Time); ok {
-				values[i] = timestamp.Format(time.RFC3339Nano)
+		identities = append(identities, RowIdentity{TableOID: values[0].(string), CTID: values[1].(string), Version: values[2].(string)})
+		row := values[3:]
+		for i, column := range columns {
+			if column.DataType == "boolean" && row[i] != nil {
+				row[i] = row[i] == "true"
 			}
 		}
-		rowsData = append(rowsData, values)
+		rowsData = append(rowsData, row)
 	}
 	if err := rows.Err(); err != nil {
 		return TableData{}, fmt.Errorf("Could not read table rows: %w", err)
 	}
 
-	return TableData{Columns: columns, Rows: rowsData, RowCount: rowCount}, nil
+	return TableData{Columns: columns, Rows: rowsData, RowCount: rowCount, Identities: identities}, nil
 }
 
 // CloseConnection releases a connection and removes it from the active list.

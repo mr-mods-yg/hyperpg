@@ -63,3 +63,11 @@ export function ListTables(connectionID: string): $CancellablePromise<$models.Ta
 export function OpenSavedConnection(connectionID: string): $CancellablePromise<$models.ConnectionInfo> {
     return $Call.ByID(2564937657, connectionID);
 }
+
+/**
+ * SaveTableChanges applies the entire draft in one transaction. Any constraint
+ * failure or changed/deleted row rolls back every edit, insertion and deletion.
+ */
+export function SaveTableChanges(connectionID: string, schema: string, tableName: string, changes: $models.TableChange[] | null): $CancellablePromise<void> {
+    return $Call.ByID(2633861226, connectionID, schema, tableName, changes);
+}

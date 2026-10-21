@@ -4,6 +4,10 @@
 export interface ColumnInfo {
     "name": string;
     "dataType": string;
+    "nullable": boolean;
+    "hasDefault": boolean;
+    "generated": boolean;
+    "autoIncrement": boolean;
 }
 
 export interface ConnectionInfo {
@@ -14,10 +18,27 @@ export interface ConnectionInfo {
     "username": string;
 }
 
+/**
+ * RowIdentity identifies one physical row version, including partitioned tables
+ * and tables without a primary key. xmin prevents overwriting concurrent edits.
+ */
+export interface RowIdentity {
+    "tableOID": string;
+    "ctid": string;
+    "version": string;
+}
+
+export interface TableChange {
+    "kind": string;
+    "identity": RowIdentity | null;
+    "values": { [_ in string]?: string | null } | null;
+}
+
 export interface TableData {
     "columns": ColumnInfo[] | null;
     "rows": (any[] | null)[] | null;
     "rowCount": number;
+    "identities": RowIdentity[] | null;
 }
 
 export interface TableInfo {
@@ -29,4 +50,5 @@ export interface UpdateInfo {
     "available": boolean;
     "version": string;
     "releaseUrl": string;
+    "installError": string;
 }

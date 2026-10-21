@@ -31,9 +31,11 @@ Unicode true
 ## !define REQUEST_EXECUTION_LEVEL "admin"            # Default "admin"  see also https://nsis.sourceforge.io/Docs/Chapter4.html
 ## !define WAILS_INSTALL_SCOPE     "user"             # Default "machine" - set to "user" for per-user install ($LOCALAPPDATA) without UAC prompt
 ####
+!define INFO_PROJECTNAME "hyperpg"
 !define INFO_COMPANYNAME "HyperPG"
 !define INFO_PRODUCTNAME "HyperPG"
-!define INFO_COPYRIGHT "© 2026 HyperPG"
+!define INFO_COPYRIGHT "Copyright (c) 2026 HyperPG"
+!define UNINST_KEY_NAME "HyperPG"
 
 ## Include the wails tools
 ####
@@ -65,6 +67,7 @@ ManifestDPIAware true
 # !insertmacro MUI_PAGE_LICENSE "resources\eula.txt" # Adds a EULA page to the installer
 !insertmacro MUI_PAGE_DIRECTORY # In which folder install page.
 !insertmacro MUI_PAGE_INSTFILES # Installing page.
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${PRODUCT_EXECUTABLE}"
 !insertmacro MUI_PAGE_FINISH # Finished installation page.
 
 !insertmacro MUI_UNPAGE_INSTFILES # Uninstalling page
@@ -86,6 +89,10 @@ ShowInstDetails show # This will always show the installation details.
 
 Function .onInit
    !insertmacro wails.checkArchitecture
+   ReadEnvStr $0 "HYPERPG_INSTALL_DIR"
+   ${If} $0 != ""
+       StrCpy $INSTDIR $0
+   ${EndIf}
 FunctionEnd
 
 Section
