@@ -105,8 +105,8 @@ func persistedUpdateError() string {
 	return ""
 }
 
-// InstallUpdate downloads and verifies the selected release, then installs it
-// and restarts the app after it has shut down.
+// InstallUpdate downloads and verifies the selected release, starts the
+// platform-specific update flow, then closes the app when that flow is ready.
 func (s *UpdateService) InstallUpdate(channel string) error {
 	s.mu.Lock()
 	if s.installing {
@@ -249,13 +249,17 @@ func (s *UpdateService) downloadAsset(asset githubAsset) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("Could not locate the current application: %w", err)
 	}
+	stageDir := filepath.Dir(executable)
+	if runtime.GOOS == "windows" {
+		stageDir = os.TempDir()
+	}
 	tempPattern := ".hyperpg-update-*"
 	if runtime.GOOS == "windows" {
 		tempPattern += ".exe"
 	}
-	staged, err := os.CreateTemp(filepath.Dir(executable), tempPattern)
+	staged, err := os.CreateTemp(stageDir, tempPattern)
 	if err != nil {
-		return "", fmt.Errorf("Could not write an update next to the app. Move hyperpg to a folder you can write to, then try again: %w", err)
+		return "", fmt.Errorf("Could not create a temporary file for the update: %w", err)
 	}
 	stagePath := staged.Name()
 	hash := sha256.New()
