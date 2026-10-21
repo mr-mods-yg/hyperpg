@@ -133,6 +133,10 @@ jobs:
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
 
+      - name: Install NSIS
+        if: matrix.platform == 'windows'
+        run: choco install nsis --yes --no-progress
+
       - name: Add Go tools to PATH (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
@@ -155,15 +159,24 @@ jobs:
           APP_VERSION: ${{ needs.source.outputs.version }}
         run: printf '%s' "$APP_VERSION" > VERSION
 
-      - name: Build application
+      - name: Build Linux application
+        if: matrix.platform == 'linux'
         run: wails3 build
 
-      - name: Package Windows executable
+      - name: Package Windows installer
         if: matrix.platform == 'windows'
         shell: pwsh
+        env:
+          APP_VERSION: ${{ needs.source.outputs.version }}
         run: |
+          if ($env:APP_VERSION -match '^v?(\d+)\.(\d+)\.(\d+)$') {
+            $installerVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3])"
+          } else {
+            $installerVersion = "0.0.$env:GITHUB_RUN_NUMBER"
+          }
+          wails3 task windows:package ARCH=amd64 INSTALL_SCOPE=user PRODUCT_VERSION=$installerVersion
           New-Item -ItemType Directory -Path release -Force | Out-Null
-          Copy-Item bin\hyperpg.exe release\hyperpg-windows-amd64.exe
+          Copy-Item bin\hyperpg-amd64-installer.exe release\hyperpg-windows-amd64-setup.exe
 
       - name: Package Linux executable
         if: matrix.platform == 'linux'

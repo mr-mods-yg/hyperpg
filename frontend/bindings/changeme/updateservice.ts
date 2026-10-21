@@ -17,8 +17,8 @@ export function CheckForUpdates(channel: string): $CancellablePromise<$models.Up
 }
 
 /**
- * InstallUpdate downloads and verifies the selected release, replaces this
- * executable, and restarts the app after it has shut down.
+ * InstallUpdate downloads and verifies the selected release, then installs it
+ * and restarts the app after it has shut down.
  */
 export function InstallUpdate(channel: string): $CancellablePromise<void> {
     return $Call.ByID(2153346210, channel);

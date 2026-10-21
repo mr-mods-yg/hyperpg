@@ -78,7 +78,7 @@ func replaceAndRestart(staged string) error {
 		return fmt.Errorf("Could not finish writing the update helper: %w", helperCloseErr)
 	}
 
-	cmd := exec.Command(helperPath, updaterHelperArgument, strconv.Itoa(os.Getpid()), staged, executable)
+	cmd := exec.Command(helperPath, updaterHelperArgument, strconv.Itoa(os.Getpid()), "install", staged, executable)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
 	cmd.Stdin = nil
 	stdout, err := cmd.StdoutPipe()
@@ -148,7 +148,7 @@ func runUpdaterHelper(args []string) (bool, error) {
 		_ = json.NewEncoder(os.Stdout).Encode(updaterHandshake{Error: err.Error()})
 		return true, err
 	}
-	if len(args) != 4 {
+	if len(args) != 5 || args[2] != "install" {
 		return failBeforeReady(fmt.Errorf("Invalid update helper arguments"))
 	}
 	helperPath, err := os.Executable()
@@ -162,17 +162,18 @@ func runUpdaterHelper(args []string) (bool, error) {
 	if err != nil || processID <= 0 {
 		return failBeforeReady(fmt.Errorf("Invalid application process ID"))
 	}
-	staged, err := filepath.Abs(args[2])
+	staged, err := filepath.Abs(args[3])
 	if err != nil {
 		return failBeforeReady(fmt.Errorf("Invalid staged update path"))
 	}
-	target, err := filepath.Abs(args[3])
+	target, err := filepath.Abs(args[4])
 	if err != nil {
 		return failBeforeReady(fmt.Errorf("Invalid application path"))
 	}
 	if !sameWindowsPath(filepath.Dir(staged), filepath.Dir(target)) ||
 		!strings.EqualFold(filepath.Ext(target), ".exe") ||
-		!strings.HasPrefix(strings.ToLower(filepath.Base(staged)), ".hyperpg-update-") {
+		!strings.HasPrefix(strings.ToLower(filepath.Base(staged)), ".hyperpg-update-") ||
+		!strings.EqualFold(filepath.Ext(staged), ".exe") {
 		return failBeforeReady(fmt.Errorf("The update helper received unexpected paths"))
 	}
 	stagedInfo, err := os.Stat(staged)
@@ -195,18 +196,24 @@ func runUpdaterHelper(args []string) (bool, error) {
 	if err := waitForProcess(process); err != nil {
 		return true, failAfterReady(target, err, false)
 	}
-	if err := applyUpdate(staged, target); err != nil {
+	if err := backupCurrentExecutable(target); err != nil {
+		return true, failAfterReady(target, err, true)
+	}
+	if err := runWindowsInstaller(staged, target); err != nil {
+		rollbackErr := restoreBackup(target)
+		if rollbackErr != nil {
+			err = fmt.Errorf("%w; could not restore the previous application: %v", err, rollbackErr)
+			return true, failAfterReady(target, err, false)
+		}
 		return true, failAfterReady(target, err, true)
 	}
 	if err := startUpdatedApplication(target); err != nil {
 		rollbackErr := restoreBackup(target)
-		if rollbackErr == nil {
-			_ = startUpdatedApplication(target)
-		}
 		if rollbackErr != nil {
 			err = fmt.Errorf("%w; could not restore the previous application: %v", err, rollbackErr)
+			return true, failAfterReady(target, err, false)
 		}
-		return true, failAfterReady(target, err, false)
+		return true, failAfterReady(target, err, true)
 	}
 	_ = os.Remove(target + ".hyperpg-backup")
 	clearUpdateError(target)
@@ -243,42 +250,47 @@ func waitForProcess(handle windows.Handle) error {
 	return nil
 }
 
-func applyUpdate(staged, target string) error {
+func backupCurrentExecutable(target string) error {
 	backup := target + ".hyperpg-backup"
 	if err := os.Remove(backup); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("Could not remove an earlier update backup: %w", err)
 	}
-	if err := renameWithRetry(target, backup); err != nil {
-		return fmt.Errorf("Could not move the current application: %w", err)
+	source, err := os.Open(target)
+	if err != nil {
+		return fmt.Errorf("Could not open the current application for backup: %w", err)
 	}
-	if err := renameWithRetry(staged, target); err != nil {
-		restoreErr := renameWithRetry(backup, target)
-		if restoreErr != nil {
-			return fmt.Errorf("Could not install the downloaded update: %w; restoring the current application also failed: %v", err, restoreErr)
+	destination, err := os.Create(backup)
+	if err != nil {
+		_ = source.Close()
+		return fmt.Errorf("Could not create the current application backup: %w", err)
+	}
+	_, copyErr := io.Copy(destination, source)
+	sourceCloseErr := source.Close()
+	destinationCloseErr := destination.Close()
+	if copyErr != nil || sourceCloseErr != nil || destinationCloseErr != nil {
+		_ = os.Remove(backup)
+		if copyErr != nil {
+			return fmt.Errorf("Could not copy the current application backup: %w", copyErr)
 		}
-		return fmt.Errorf("Could not install the downloaded update: %w", err)
+		if sourceCloseErr != nil {
+			return fmt.Errorf("Could not finish reading the current application backup: %w", sourceCloseErr)
+		}
+		return fmt.Errorf("Could not finish writing the current application backup: %w", destinationCloseErr)
 	}
 	return nil
 }
 
-func renameWithRetry(oldPath, newPath string) error {
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		err := os.Rename(oldPath, newPath)
-		if err == nil {
-			return nil
-		}
-		if !isTransientRenameError(err) || time.Now().After(deadline) {
-			return err
-		}
-		time.Sleep(100 * time.Millisecond)
+func runWindowsInstaller(installer, target string) error {
+	cmd := exec.Command(installer, "/S")
+	cmd.Env = append(os.Environ(), "HYPERPG_INSTALL_DIR="+filepath.Dir(target))
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("The Windows installer could not complete: %w", err)
 	}
-}
-
-func isTransientRenameError(err error) bool {
-	return errors.Is(err, windows.ERROR_SHARING_VIOLATION) ||
-		errors.Is(err, windows.ERROR_LOCK_VIOLATION) ||
-		errors.Is(err, windows.ERROR_ACCESS_DENIED)
+	return nil
 }
 
 func restoreBackup(target string) error {
@@ -286,7 +298,7 @@ func restoreBackup(target string) error {
 	if err := os.Remove(target); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	return renameWithRetry(backup, target)
+	return os.Rename(backup, target)
 }
 
 func failAfterReady(target string, err error, restartOld bool) error {

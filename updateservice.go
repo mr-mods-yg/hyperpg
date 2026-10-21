@@ -105,8 +105,8 @@ func persistedUpdateError() string {
 	return ""
 }
 
-// InstallUpdate downloads and verifies the selected release, replaces this
-// executable, and restarts the app after it has shut down.
+// InstallUpdate downloads and verifies the selected release, then installs it
+// and restarts the app after it has shut down.
 func (s *UpdateService) InstallUpdate(channel string) error {
 	s.mu.Lock()
 	if s.installing {
@@ -249,7 +249,11 @@ func (s *UpdateService) downloadAsset(asset githubAsset) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("Could not locate the current application: %w", err)
 	}
-	staged, err := os.CreateTemp(filepath.Dir(executable), ".hyperpg-update-*")
+	tempPattern := ".hyperpg-update-*"
+	if runtime.GOOS == "windows" {
+		tempPattern += ".exe"
+	}
+	staged, err := os.CreateTemp(filepath.Dir(executable), tempPattern)
 	if err != nil {
 		return "", fmt.Errorf("Could not write an update next to the app. Move hyperpg to a folder you can write to, then try again: %w", err)
 	}
@@ -345,7 +349,7 @@ func extractLinuxBinary(archivePath, targetDir string) (string, error) {
 func platformAssetName() string {
 	switch {
 	case runtime.GOOS == "windows" && runtime.GOARCH == "amd64":
-		return "hyperpg-windows-amd64.exe"
+		return "hyperpg-windows-amd64-setup.exe"
 	case runtime.GOOS == "linux" && runtime.GOARCH == "amd64":
 		return "hyperpg-linux-amd64.tar.gz"
 	default:
