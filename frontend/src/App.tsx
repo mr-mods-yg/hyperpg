@@ -15,7 +15,7 @@ type TableInfo = { schema: string; name: string }
 type View = 'data' | 'structure'
 type Theme = 'light' | 'dark'
 type UpdateChannel = 'stable' | 'nightly'
-type UpdateInfo = { available: boolean; version: string; releaseUrl: string }
+type UpdateInfo = { available: boolean; version: string; releaseUrl: string; installError?: string }
 
 const SIDEBAR_MIN_WIDTH = 190
 const SIDEBAR_MAX_WIDTH = 420
@@ -72,6 +72,7 @@ function App() {
   const [updateCheckMessage, setUpdateCheckMessage] = useState('')
   const [checkingUpdates, setCheckingUpdates] = useState(false)
   const [installingUpdate, setInstallingUpdate] = useState(false)
+  const [updateRestarting, setUpdateRestarting] = useState(false)
   const [updateInstallError, setUpdateInstallError] = useState('')
   const [dismissedUpdate, setDismissedUpdate] = useState('')
   const [updateRefreshKey, setUpdateRefreshKey] = useState(0)
@@ -145,8 +146,10 @@ function App() {
     UpdateService.CheckForUpdates(updateChannel)
       .then((result) => {
         if (cancelled) return
-        setUpdateInfo(result?.available ? result : null)
-        setUpdateCheckMessage(result?.available ? `Version ${result.version} is ready.` : 'You’re up to date.')
+        setUpdateInfo(result?.available || result?.installError ? result : null)
+        setUpdateInstallError(result?.installError ?? '')
+        setUpdateCheckError(result?.installError ?? '')
+        setUpdateCheckMessage(result?.installError ? 'The previous update did not finish.' : result?.available ? `Version ${result.version} is ready.` : 'You’re up to date.')
       })
       .catch((error: unknown) => {
         if (!cancelled) setUpdateCheckError(errorMessage(error, 'Could not check for updates.'))
@@ -284,15 +287,18 @@ function App() {
 
   const handleInstallUpdate = async () => {
     setInstallingUpdate(true)
+    setUpdateRestarting(false)
     setUpdateCheckError('')
     setUpdateInstallError('')
     try {
       await UpdateService.InstallUpdate(updateChannel)
+      setUpdateRestarting(true)
     } catch (error) {
       const message = errorMessage(error, 'Could not install this update.')
       setUpdateCheckError(message)
       setUpdateInstallError(message)
       setInstallingUpdate(false)
+      setUpdateRestarting(false)
     }
   }
 
@@ -605,11 +611,11 @@ function App() {
         )}
       </main>
 
-      {updateInfo?.available && dismissedUpdate !== updateInfo.version && !showSettingsDialog && !showConnectionDialog ? <aside className={`update-alert ${updateInstallError ? 'has-error' : ''}`} role="alert">
+      {updateInfo && (updateInfo.available || updateInstallError) && dismissedUpdate !== (updateInfo.version || 'update-error') && !showSettingsDialog && !showConnectionDialog ? <aside className={`update-alert ${updateInstallError ? 'has-error' : ''}`} role="alert">
         <span className="update-alert-mark" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none"><path d="M9 2.2v8.2m0 3.4v.1M4.2 15.3h9.6" /><path d="m5.7 6.4 3.3-3.3 3.3 3.3" /></svg></span>
-        <span className="update-alert-copy"><strong>{updateInstallError ? 'Update could not start' : 'Update available'}</strong><small>{updateInstallError || `${updateInfo.version} · ${updateChannel === 'stable' ? 'Stable' : 'Nightly'}`}</small></span>
-        <button className="update-now-button" type="button" onClick={() => guardNavigation(() => { void handleInstallUpdate() })} disabled={installingUpdate}>{installingUpdate ? <><span className="button-spinner" />Restarting</> : 'Update now'}</button>
-        <button className="update-dismiss" type="button" aria-label="Dismiss update notice" onClick={() => setDismissedUpdate(updateInfo.version)}><svg viewBox="0 0 18 18" fill="none"><path d="m4 4 10 10M14 4 4 14" /></svg></button>
+        <span className="update-alert-copy"><strong>{updateInstallError ? 'Update failed' : 'Update available'}</strong><small>{updateInstallError || `${updateInfo.version} · ${updateChannel === 'stable' ? 'Stable' : 'Nightly'}`}</small></span>
+        <button className="update-now-button" type="button" onClick={() => guardNavigation(() => { void handleInstallUpdate() })} disabled={installingUpdate || !updateInfo.available}>{installingUpdate ? <><span className="button-spinner" />{updateRestarting ? 'Restarting' : 'Updating…'}</> : updateInfo.available ? 'Update now' : 'Update unavailable'}</button>
+        <button className="update-dismiss" type="button" aria-label="Dismiss update notice" onClick={() => setDismissedUpdate(updateInfo.version || 'update-error')}><svg viewBox="0 0 18 18" fill="none"><path d="m4 4 10 10M14 4 4 14" /></svg></button>
       </aside> : null}
 
       {pendingNavigation ? <div className="modal-backdrop" role="presentation">

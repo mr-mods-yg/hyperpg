@@ -50,4 +50,5 @@ export interface UpdateInfo {
     "available": boolean;
     "version": string;
     "releaseUrl": string;
+    "installError": string;
 }

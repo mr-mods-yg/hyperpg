@@ -30,9 +30,10 @@ const maxUpdateDownloadSize = 512 << 20
 var embeddedVersion string
 
 type UpdateInfo struct {
-	Available  bool   `json:"available"`
-	Version    string `json:"version"`
-	ReleaseURL string `json:"releaseUrl"`
+	Available    bool   `json:"available"`
+	Version      string `json:"version"`
+	ReleaseURL   string `json:"releaseUrl"`
+	InstallError string `json:"installError"`
 }
 
 type UpdateService struct {
@@ -78,7 +79,10 @@ func (s *UpdateService) CheckForUpdates(channel string) (UpdateInfo, error) {
 	release, err := s.latestRelease(channel)
 	if err != nil {
 		if errors.Is(err, errNoPublishedRelease) {
-			return UpdateInfo{Available: false}, nil
+			return addPersistedUpdateError(UpdateInfo{Available: false}), nil
+		}
+		if persistedError := persistedUpdateError(); persistedError != "" {
+			return UpdateInfo{InstallError: persistedError}, nil
 		}
 		return UpdateInfo{}, err
 	}
@@ -86,7 +90,19 @@ func (s *UpdateService) CheckForUpdates(channel string) (UpdateInfo, error) {
 		return UpdateInfo{}, fmt.Errorf("This release has no build for %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 	available, version := releaseIsNewer(channel, release.TagName, currentAppVersion())
-	return UpdateInfo{Available: available, Version: version, ReleaseURL: release.HTMLURL}, nil
+	return addPersistedUpdateError(UpdateInfo{Available: available, Version: version, ReleaseURL: release.HTMLURL}), nil
+}
+
+func addPersistedUpdateError(info UpdateInfo) UpdateInfo {
+	info.InstallError = persistedUpdateError()
+	return info
+}
+
+func persistedUpdateError() string {
+	if executable, err := os.Executable(); err == nil {
+		return readUpdateError(executable)
+	}
+	return ""
 }
 
 // InstallUpdate downloads and verifies the selected release, replaces this
