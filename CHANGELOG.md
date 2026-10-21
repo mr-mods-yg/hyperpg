@@ -4,6 +4,17 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-10-21
+
+### Fixed
+
+- Show a Windows update progress window with visible errors if installation fails.
+- Keep the progress window open while the installer runs, then close it after HyperPG restarts.
+
+### Upgrade note
+
+- When updating from v1.0.3 or older, run the v1.0.4 setup installer once manually to replace the older hidden updater helper. Later in-app updates show the progress window.
+
 ## [1.0.3] - 2026-10-21
 
 ### Added
