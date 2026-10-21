@@ -83,7 +83,6 @@ function App() {
     }
   })
   const [collapsedSchemas, setCollapsedSchemas] = useState<Record<string, boolean>>({})
-  const [expandedTableKey, setExpandedTableKey] = useState('')
 
   const activeConnection = connections.find((connection) => connection.id === selectedConnectionId) ?? null
 
@@ -332,7 +331,6 @@ function App() {
       setTableData(null)
       setPageOffset(0)
       setCollapsedSchemas({})
-      setExpandedTableKey('')
       setView('data')
       setMobileNavOpen(false)
     } catch (error) {
@@ -359,7 +357,6 @@ function App() {
       setPageOffset(0)
       setRowSearch('')
       setCollapsedSchemas({})
-      setExpandedTableKey('')
       if (remaining[0]) void openConnection(remaining[0].id)
     }
   }
@@ -368,7 +365,6 @@ function App() {
     setSelectedTable(table)
     setPageOffset(0)
     setRowSearch('')
-    setExpandedTableKey(`${table.schema}.${table.name}`)
     setCollapsedSchemas((current) => current[table.schema] ? { ...current, [table.schema]: false } : current)
     setView('data')
     setMobileNavOpen(false)
@@ -376,19 +372,6 @@ function App() {
 
   const toggleSchema = (schema: string) => {
     setCollapsedSchemas((current) => ({ ...current, [schema]: !current[schema] }))
-  }
-
-  const toggleTable = (table: TableInfo) => {
-    const key = `${table.schema}.${table.name}`
-    if (expandedTableKey === key) {
-      setExpandedTableKey('')
-      return
-    }
-    if (selectedTable?.schema !== table.schema || selectedTable.name !== table.name) {
-      selectTable(table)
-    } else {
-      setExpandedTableKey(key)
-    }
   }
 
   const groupedTables = useMemo(() => {
@@ -459,20 +442,13 @@ function App() {
                   {!collapsedSchemas[schema] ? schemaTables.map((table) => {
                     const tableKey = `${table.schema}.${table.name}`
                     const isSelected = selectedTable?.schema === table.schema && selectedTable.name === table.name
-                    const isExpanded = expandedTableKey === tableKey
                     return <div className={`table-nav-entry ${isSelected ? 'is-current' : ''}`} key={tableKey}>
                       <div className="table-nav-row">
-                        <button className="table-nav-item" type="button" aria-current={isSelected ? 'page' : undefined} aria-label={isSelected ? `${isExpanded ? 'Collapse' : 'Expand'} columns for ${table.name}` : `Open ${table.name} table`} onClick={() => isSelected ? setExpandedTableKey((current) => current === tableKey ? '' : tableKey) : selectTable(table)}>
+                        <button className="table-nav-item" type="button" aria-current={isSelected ? 'page' : undefined} aria-label={`Open ${table.name} table`} onClick={() => { if (!isSelected) selectTable(table) }}>
                           <span className="table-grid-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none"><rect x="2.5" y="3" width="11" height="10" rx="1.5" /><path d="M2.5 6.5h11M6.2 6.5V13" /></svg></span>
                           <span>{table.name}</span>
                         </button>
-                        <button className={`table-disclosure ${isExpanded ? 'is-open' : ''}`} type="button" aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${table.name}`} aria-expanded={isExpanded} onClick={() => toggleTable(table)}>
-                          <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m5.5 3.5 5 4.5-5 4.5" /></svg>
-                        </button>
                       </div>
-                      {isExpanded ? <div className="table-columns">
-                        {isSelected && tableData ? tableData.columns.map((column) => <div className="table-column-item" key={column.name} title={`${column.name} · ${column.dataType}`}><span>{column.name}</span><small>{column.dataType}</small></div>) : isSelected && tableLoading ? <div className="table-column-placeholder"><span className="tiny-spinner" />Loading columns</div> : <div className="table-column-placeholder">Select to load columns</div>}
-                      </div> : null}
                     </div>
                   }) : null}
                 </div>

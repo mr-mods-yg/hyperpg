@@ -17,6 +17,7 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ### Fixed
 
+- Simplify sidebar table navigation to name labels without column dropdowns.
 - Expand the focus border around the full cell selection, including separate ranges, without outlines around interior cells.
 - Preserve exact large integers, decimal values, arrays, and binary values when reading table data.
 - Display actual column nullability in the Structure view.
