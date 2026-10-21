@@ -291,10 +291,16 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
               const key = cellKey(position)
               const value = draftValue(row, column, columnIndex, edits)
               const selected = selection.has(key)
+              const selectionEdges = selected ? [
+                !selection.has(cellKey({ row: rowIndex - 1, column: columnIndex })) ? 'selection-top' : '',
+                !selection.has(cellKey({ row: rowIndex, column: columnIndex + 1 })) ? 'selection-right' : '',
+                !selection.has(cellKey({ row: rowIndex + 1, column: columnIndex })) ? 'selection-bottom' : '',
+                !selection.has(cellKey({ row: rowIndex, column: columnIndex - 1 })) ? 'selection-left' : '',
+              ].join(' ') : ''
               const editing = editor?.row.id === row.id && editor.column === columnIndex
               const changed = Object.prototype.hasOwnProperty.call(edits[row.id] ?? {}, column.name)
               return <td key={column.name} role="gridcell" data-cell={key} aria-selected={selected} aria-readonly={column.generated || deleted.has(row.id)} tabIndex={active ? cellKey(active) === key ? 0 : -1 : rowIndex === 0 && columnIndex === 0 ? 0 : -1}
-                className={`${selected ? 'is-selected' : ''} ${active && cellKey(active) === key ? 'is-active' : ''} ${changed ? 'is-changed' : ''} ${editing ? 'is-editing' : ''}`}
+                className={`${selected ? 'is-selected' : ''} ${selectionEdges} ${active && cellKey(active) === key ? 'is-active' : ''} ${changed ? 'is-changed' : ''} ${editing ? 'is-editing' : ''}`}
                 aria-label={`Row ${rowIndex + 1}, ${column.name}: ${value === undefined ? 'DEFAULT' : value === null ? 'NULL' : valueText(value)}`}
                 onFocus={() => { if (!active) { setActive(position); setSelection(new Set([key])); anchor.current = position } }}
                 onPointerDown={(event) => selectCell(event, position)} onPointerEnter={(event) => extendDrag(event, position)} onDoubleClick={() => beginEdit(position)}
