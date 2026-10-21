@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -24,9 +25,167 @@ const updaterHelperArgument = "--hyperpg-update-helper"
 
 const updaterHandshakeTimeout = 15 * time.Second
 
+const (
+	updaterWindowWidth   = 480
+	updaterWindowHeight  = 190
+	windowStylePopup     = 0x80000000
+	windowStyleCaption   = 0x00C00000
+	windowStyleVisible   = 0x10000000
+	windowStyleChild     = 0x40000000
+	staticStyleCenter    = 0x00000001
+	staticStyleNoPrefix  = 0x00000080
+	progressStyleMarquee = 0x00000008
+	progressSetMarquee   = 0x040A
+	windowMessageClose   = 0x0010
+	windowMessageQuit    = 0x0012
+	messageBoxIconError  = 0x00000010
+	messageBoxSetFocus   = 0x00010000
+	messageBoxTopmost    = 0x00040000
+)
+
+var updaterUser32 = syscall.NewLazyDLL("user32.dll")
+
+type updaterMessage struct {
+	window  windows.Handle
+	message uint32
+	padding uint32
+	wParam  uintptr
+	lParam  uintptr
+	time    uint32
+	pointX  int32
+	pointY  int32
+	private uint32
+}
+
+type windowsUpdateWindow struct {
+	handle   windows.Handle
+	progress windows.Handle
+	threadID uint32
+	done     chan struct{}
+}
+
 type updaterHandshake struct {
 	Ready bool   `json:"ready"`
 	Error string `json:"error,omitempty"`
+}
+
+func newWindowsUpdateWindow() (*windowsUpdateWindow, error) {
+	window := &windowsUpdateWindow{done: make(chan struct{})}
+	ready := make(chan error, 1)
+	go window.run(ready)
+	select {
+	case err := <-ready:
+		if err != nil {
+			return nil, err
+		}
+		return window, nil
+	case <-time.After(5 * time.Second):
+		return nil, fmt.Errorf("The update progress window did not open in time")
+	}
+}
+
+func (w *windowsUpdateWindow) run(ready chan<- error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	defer close(w.done)
+	w.threadID = windows.GetCurrentThreadId()
+
+	className, _ := windows.UTF16PtrFromString("STATIC")
+	initialText, _ := windows.UTF16PtrFromString("HyperPG is preparing to update.\r\n\r\nThis window will close when the update finishes.")
+	getModuleHandle := syscall.NewLazyDLL("kernel32.dll").NewProc("GetModuleHandleW")
+	module, _, _ := getModuleHandle.Call(0)
+	createWindow := updaterUser32.NewProc("CreateWindowExW")
+	style := uintptr(windowStylePopup | windowStyleCaption | staticStyleCenter | staticStyleNoPrefix)
+	hwnd, _, callErr := createWindow.Call(
+		0,
+		uintptr(unsafe.Pointer(className)),
+		uintptr(unsafe.Pointer(initialText)),
+		style,
+		uintptr(0x80000000), uintptr(0x80000000), updaterWindowWidth, updaterWindowHeight,
+		0, 0, module, 0,
+	)
+	if hwnd == 0 {
+		ready <- fmt.Errorf("Could not open the Windows update progress window: %w", callErr)
+		return
+	}
+	w.handle = windows.Handle(hwnd)
+	w.createProgressBar(module)
+	updaterUser32.NewProc("ShowWindow").Call(hwnd, 5)
+	updaterUser32.NewProc("UpdateWindow").Call(hwnd)
+	updaterUser32.NewProc("SetForegroundWindow").Call(hwnd)
+	ready <- nil
+
+	var message updaterMessage
+	for {
+		result, _, _ := updaterUser32.NewProc("GetMessageW").Call(uintptr(unsafe.Pointer(&message)), 0, 0, 0)
+		if int32(result) <= 0 {
+			return
+		}
+		updaterUser32.NewProc("TranslateMessage").Call(uintptr(unsafe.Pointer(&message)))
+		updaterUser32.NewProc("DispatchMessageW").Call(uintptr(unsafe.Pointer(&message)))
+	}
+}
+
+func (w *windowsUpdateWindow) createProgressBar(module uintptr) {
+	controls := struct {
+		size uint32
+		icc  uint32
+	}{size: uint32(unsafe.Sizeof(uint32(0)) * 2), icc: 0x00000020}
+	initControls := syscall.NewLazyDLL("comctl32.dll").NewProc("InitCommonControlsEx")
+	if initialized, _, _ := initControls.Call(uintptr(unsafe.Pointer(&controls))); initialized == 0 {
+		return
+	}
+	className, _ := windows.UTF16PtrFromString("msctls_progress32")
+	createWindow := updaterUser32.NewProc("CreateWindowExW")
+	style := uintptr(windowStyleChild | windowStyleVisible | progressStyleMarquee)
+	hwnd, _, _ := createWindow.Call(
+		0,
+		uintptr(unsafe.Pointer(className)),
+		0,
+		style,
+		32, 112, updaterWindowWidth-64, 18,
+		uintptr(w.handle), 0, module, 0,
+	)
+	if hwnd == 0 {
+		return
+	}
+	w.progress = windows.Handle(hwnd)
+	updaterUser32.NewProc("SendMessageW").Call(hwnd, progressSetMarquee, 1, 40)
+}
+
+func (w *windowsUpdateWindow) setStatus(status string) {
+	if w == nil || w.handle == 0 {
+		return
+	}
+	text, err := windows.UTF16PtrFromString(status)
+	if err != nil {
+		return
+	}
+	updaterUser32.NewProc("SetWindowTextW").Call(uintptr(w.handle), uintptr(unsafe.Pointer(text)))
+}
+
+func (w *windowsUpdateWindow) showError(err error) {
+	message := "The update could not be installed.\r\n\r\n" + err.Error() + "\r\n\r\nYou can close this message and try the update again."
+	w.setStatus("Update failed. See the error message for details.")
+	body, bodyErr := windows.UTF16PtrFromString(message)
+	title, titleErr := windows.UTF16PtrFromString("HyperPG update failed")
+	if bodyErr != nil || titleErr != nil {
+		return
+	}
+	flags := uintptr(messageBoxIconError | messageBoxSetFocus | messageBoxTopmost)
+	updaterUser32.NewProc("MessageBoxW").Call(uintptr(w.handle), uintptr(unsafe.Pointer(body)), uintptr(unsafe.Pointer(title)), flags)
+}
+
+func (w *windowsUpdateWindow) close() {
+	if w == nil || w.handle == 0 {
+		return
+	}
+	updaterUser32.NewProc("PostMessageW").Call(uintptr(w.handle), windowMessageClose, 0, 0)
+	updaterUser32.NewProc("PostThreadMessageW").Call(uintptr(w.threadID), windowMessageQuit, 0, 0)
+	select {
+	case <-w.done:
+	case <-time.After(2 * time.Second):
+	}
 }
 
 func replaceAndRestart(staged string) error {
@@ -79,7 +238,6 @@ func replaceAndRestart(staged string) error {
 	}
 
 	cmd := exec.Command(helperPath, updaterHelperArgument, strconv.Itoa(os.Getpid()), "install", staged, executable)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
 	cmd.Stdin = nil
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -188,35 +346,46 @@ func runUpdaterHelper(args []string) (bool, error) {
 		return failBeforeReady(err)
 	}
 	defer windows.CloseHandle(process)
+	updateWindow, err := newWindowsUpdateWindow()
+	if err != nil {
+		return failBeforeReady(fmt.Errorf("Could not show update progress: %w", err))
+	}
+	defer updateWindow.close()
 	if err := json.NewEncoder(os.Stdout).Encode(updaterHandshake{Ready: true}); err != nil {
 		return true, fmt.Errorf("Could not confirm updater readiness: %w", err)
 	}
 
 	clearUpdateError(target)
+	updateWindow.setStatus("Waiting for HyperPG to close...\r\n\r\nThe update will continue automatically.")
 	if err := waitForProcess(process); err != nil {
-		return true, failAfterReady(target, err, false)
+		return true, failAfterReady(target, err, false, updateWindow)
 	}
+	updateWindow.setStatus("Preparing to install the update...\r\n\r\nSaving a copy of your current version.")
 	if err := backupCurrentExecutable(target); err != nil {
-		return true, failAfterReady(target, err, true)
+		return true, failAfterReady(target, err, true, updateWindow)
 	}
+	updateWindow.setStatus("Installing the update...\r\n\r\nThis may take a few minutes. HyperPG will reopen when the update is complete.")
 	if err := runWindowsInstaller(staged, target); err != nil {
 		rollbackErr := restoreBackup(target)
 		if rollbackErr != nil {
 			err = fmt.Errorf("%w; could not restore the previous application: %v", err, rollbackErr)
-			return true, failAfterReady(target, err, false)
+			return true, failAfterReady(target, err, false, updateWindow)
 		}
-		return true, failAfterReady(target, err, true)
+		return true, failAfterReady(target, err, true, updateWindow)
 	}
+	updateWindow.setStatus("Starting the updated version of HyperPG...")
 	if err := startUpdatedApplication(target); err != nil {
 		rollbackErr := restoreBackup(target)
 		if rollbackErr != nil {
 			err = fmt.Errorf("%w; could not restore the previous application: %v", err, rollbackErr)
-			return true, failAfterReady(target, err, false)
+			return true, failAfterReady(target, err, false, updateWindow)
 		}
-		return true, failAfterReady(target, err, true)
+		return true, failAfterReady(target, err, true, updateWindow)
 	}
 	_ = os.Remove(target + ".hyperpg-backup")
 	clearUpdateError(target)
+	updateWindow.setStatus("Update complete.\r\n\r\nHyperPG has reopened.")
+	time.Sleep(800 * time.Millisecond)
 	return true, nil
 }
 
@@ -301,7 +470,7 @@ func restoreBackup(target string) error {
 	return os.Rename(backup, target)
 }
 
-func failAfterReady(target string, err error, restartOld bool) error {
+func failAfterReady(target string, err error, restartOld bool, updateWindow *windowsUpdateWindow) error {
 	if statusErr := writeUpdateError(target, err.Error()); statusErr != nil {
 		err = fmt.Errorf("%w; could not save update error details: %v", err, statusErr)
 	}
@@ -312,6 +481,7 @@ func failAfterReady(target string, err error, restartOld bool) error {
 			}
 		}
 	}
+	updateWindow.showError(err)
 	return err
 }
 
