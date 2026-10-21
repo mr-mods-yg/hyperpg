@@ -4,13 +4,13 @@ HyperPG is a lightweight desktop client for browsing PostgreSQL databases. Paste
 
 ## Download
 
-The latest stable release is **[v1.0.4](https://github.com/mr-mods-yg/hyperpg/releases/tag/v1.0.4)**. Download the build for your system:
+The latest stable release is **[v1.0.5](https://github.com/mr-mods-yg/hyperpg/releases/tag/v1.0.5)**. Download the build for your system:
 
 - [Windows setup installer](https://github.com/mr-mods-yg/hyperpg/releases/latest/download/hyperpg-windows-amd64-setup.exe)
 - [Linux x64](https://github.com/mr-mods-yg/hyperpg/releases/latest/download/hyperpg-linux-amd64.tar.gz)
 - [All releases, including nightly builds](https://github.com/mr-mods-yg/hyperpg/releases)
 
-The Windows installer sets up HyperPG for the current user, adds Start Menu and desktop shortcuts, and can be removed from Windows Settings. When upgrading from v1.0.3 or older, run the installer once manually; later in-app updates show a progress window and any installation errors. On Linux, extract the archive and run `hyperpg`; Linux builds require GTK 4 and WebKitGTK 6.0 at runtime.
+The Windows installer sets up HyperPG for the current user, adds Start Menu and desktop shortcuts, and can be removed from Windows Settings. When upgrading from v1.0.4 or older, run the installer once manually; later in-app updates open the setup wizard directly. On Linux, extract the archive and run `hyperpg`; Linux builds require GTK 4 and WebKitGTK 6.0 at runtime.
 
 ## Features
 
@@ -21,7 +21,7 @@ The Windows installer sets up HyperPG for the current user, adds Start Menu and 
 - Resize the sidebar and collapse schema groups.
 - Switch between light and dark themes.
 - Save connection details locally in SQLite. Connection URLs are encrypted with AES-GCM, using a key held in the operating system's credential store.
-- Receive stable or nightly updates in the app. HyperPG checks at launch, verifies downloaded assets with their SHA-256 digest, and can restart to apply an update. Keep the app in a folder your account can write to.
+- Receive stable or nightly updates in the app. HyperPG checks at launch and verifies downloaded assets with their SHA-256 digest. Windows updates open the setup wizard; Linux updates restart the app. On Linux, keep the app in a folder your account can write to.
 
 ## Update channels
 

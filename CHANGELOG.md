@@ -4,6 +4,17 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-10-21
+
+### Fixed
+
+- Open the Windows setup installer visibly for in-app updates, reuse the existing install folder, and launch HyperPG from the installer's Finish page.
+- Download Windows installers to the temporary folder so updates do not require write access beside the app.
+
+### Upgrade note
+
+- When updating from v1.0.4 or older, run the v1.0.5 setup installer once manually. Later in-app updates open the setup wizard directly.
+
 ## [1.0.4] - 2026-10-21
 
 ### Fixed
