@@ -614,7 +614,7 @@ function App() {
       {updateInfo && (updateInfo.available || updateInstallError) && dismissedUpdate !== (updateInfo.version || 'update-error') && !showSettingsDialog && !showConnectionDialog ? <aside className={`update-alert ${updateInstallError ? 'has-error' : ''}`} role="alert">
         <span className="update-alert-mark" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none"><path d="M9 2.2v8.2m0 3.4v.1M4.2 15.3h9.6" /><path d="m5.7 6.4 3.3-3.3 3.3 3.3" /></svg></span>
         <span className="update-alert-copy"><strong>{updateInstallError ? 'Update failed' : 'Update available'}</strong><small>{updateInstallError || `${updateInfo.version} · ${updateChannel === 'stable' ? 'Stable' : 'Nightly'}`}</small></span>
-        <button className="update-now-button" type="button" onClick={() => guardNavigation(() => { void handleInstallUpdate() })} disabled={installingUpdate || !updateInfo.available}>{installingUpdate ? <><span className="button-spinner" />{updateRestarting ? 'Restarting' : 'Updating…'}</> : updateInfo.available ? 'Update now' : 'Update unavailable'}</button>
+        <button className="update-now-button" type="button" onClick={() => guardNavigation(() => { void handleInstallUpdate() })} disabled={installingUpdate || !updateInfo.available}>{installingUpdate ? <><span className="button-spinner" />{updateRestarting ? 'Opening installer…' : 'Updating…'}</> : updateInfo.available ? 'Update now' : 'Update unavailable'}</button>
         <button className="update-dismiss" type="button" aria-label="Dismiss update notice" onClick={() => setDismissedUpdate(updateInfo.version || 'update-error')}><svg viewBox="0 0 18 18" fill="none"><path d="m4 4 10 10M14 4 4 14" /></svg></button>
       </aside> : null}
 
