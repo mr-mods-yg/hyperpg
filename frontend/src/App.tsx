@@ -13,7 +13,7 @@ type ConnectionInfo = {
 
 type TableInfo = { schema: string; name: string }
 type View = 'data' | 'structure'
-type Theme = 'light' | 'dark'
+type Theme = 'light' | 'dark' | 'cream' | 'discord'
 type UpdateChannel = 'stable' | 'nightly'
 type UpdateInfo = { available: boolean; version: string; releaseUrl: string; installError?: string }
 
@@ -78,7 +78,8 @@ function App() {
   const [updateRefreshKey, setUpdateRefreshKey] = useState(0)
   const [theme, setTheme] = useState<Theme>(() => {
     try {
-      return localStorage.getItem('hyperpg-theme') === 'dark' ? 'dark' : 'light'
+      const savedTheme = localStorage.getItem('hyperpg-theme')
+      return savedTheme === 'dark' || savedTheme === 'cream' || savedTheme === 'discord' ? savedTheme : 'light'
     } catch {
       return 'light'
     }
@@ -669,9 +670,19 @@ function App() {
                 <span className="theme-option-copy"><strong>Light</strong><small>Soft, bright workspace</small></span>
                 <span className="theme-radio" />
               </button>
+              <button className={`theme-option ${theme === 'cream' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'cream'} onClick={() => setTheme('cream')}>
+                <span className="theme-preview theme-preview-cream"><i /><i /><i /><b /></span>
+                <span className="theme-option-copy"><strong>Cream</strong><small>Warm ivory and amber</small></span>
+                <span className="theme-radio" />
+              </button>
               <button className={`theme-option ${theme === 'dark' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'dark'} onClick={() => setTheme('dark')}>
                 <span className="theme-preview theme-preview-dark"><i /><i /><i /><b /></span>
-                <span className="theme-option-copy"><strong>Dark</strong><small>Low-light workspace</small></span>
+                <span className="theme-option-copy"><strong>Dark</strong><small>T3 Code charcoal</small></span>
+                <span className="theme-radio" />
+              </button>
+              <button className={`theme-option ${theme === 'discord' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'discord'} onClick={() => setTheme('discord')}>
+                <span className="theme-preview theme-preview-discord"><i /><i /><i /><b /></span>
+                <span className="theme-option-copy"><strong>Discord</strong><small>Blurple dark workspace</small></span>
                 <span className="theme-radio" />
               </button>
             </div>
