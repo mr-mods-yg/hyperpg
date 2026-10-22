@@ -4,6 +4,12 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-10-22
+
+### Fixed
+
+- Keep loading spinners animated when the system reduced-motion preference is enabled.
+
 ## [1.0.5] - 2026-10-21
 
 ### Fixed
