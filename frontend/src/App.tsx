@@ -14,12 +14,32 @@ type ConnectionInfo = {
 type TableInfo = { schema: string; name: string }
 type View = 'data' | 'structure'
 type Theme = 'light' | 'dark' | 'cream' | 'discord'
+type FontSize = 'small' | 'medium' | 'large'
 type UpdateChannel = 'stable' | 'nightly'
 type UpdateInfo = { available: boolean; version: string; releaseUrl: string; installError?: string }
 
 const SIDEBAR_MIN_WIDTH = 190
 const SIDEBAR_MAX_WIDTH = 420
 const DEFAULT_SIDEBAR_WIDTH = 246
+
+function handleRadioGroupKeyDown<T extends string>(
+  event: ReactKeyboardEvent<HTMLButtonElement>,
+  values: readonly T[],
+  selected: T,
+  onSelect: (value: T) => void,
+) {
+  const currentIndex = values.indexOf(selected)
+  let nextIndex = currentIndex
+  if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (currentIndex + 1) % values.length
+  else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (currentIndex - 1 + values.length) % values.length
+  else if (event.key === 'Home') nextIndex = 0
+  else if (event.key === 'End') nextIndex = values.length - 1
+  else return
+
+  event.preventDefault()
+  event.currentTarget.closest('[role="radiogroup"]')?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[nextIndex]?.focus()
+  onSelect(values[nextIndex])
+}
 
 function App() {
   const [connections, setConnections] = useState<ConnectionInfo[]>([])
@@ -42,6 +62,7 @@ function App() {
   const [pageOffset, setPageOffset] = useState(0)
   const [connectionError, setConnectionError] = useState('')
   const [showConnectionDialog, setShowConnectionDialog] = useState(false)
+  const connectionDialogOpener = useRef<HTMLElement | null>(null)
   const [connectionUrl, setConnectionUrl] = useState('')
   const [connectionName, setConnectionName] = useState('')
   const [showUrl, setShowUrl] = useState(false)
@@ -60,6 +81,7 @@ function App() {
   })
   const [resizingSidebar, setResizingSidebar] = useState(false)
   const [showSettingsDialog, setShowSettingsDialog] = useState(false)
+  const settingsDialogOpener = useRef<HTMLElement | null>(null)
   const [updateChannel, setUpdateChannel] = useState<UpdateChannel>(() => {
     try {
       return localStorage.getItem('hyperpg-update-channel') === 'nightly' ? 'nightly' : 'stable'
@@ -84,9 +106,21 @@ function App() {
       return 'light'
     }
   })
+  const [fontSize, setFontSize] = useState<FontSize>(() => {
+    try {
+      const savedFontSize = localStorage.getItem('hyperpg-font-size')
+      return savedFontSize === 'small' || savedFontSize === 'large' ? savedFontSize : 'medium'
+    } catch {
+      return 'medium'
+    }
+  })
   const [collapsedSchemas, setCollapsedSchemas] = useState<Record<string, boolean>>({})
 
   const activeConnection = connections.find((connection) => connection.id === selectedConnectionId) ?? null
+  const sidebarMaxWidth = Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, window.innerWidth - 320))
+  const themeValues: Theme[] = ['light', 'cream', 'dark', 'discord']
+  const fontSizeValues: FontSize[] = ['small', 'medium', 'large']
+  const updateChannelValues: UpdateChannel[] = ['stable', 'nightly']
 
   useEffect(() => {
     let cancelled = false
@@ -121,12 +155,31 @@ function App() {
   }, [theme])
 
   useEffect(() => {
+    document.documentElement.dataset.fontSize = fontSize
+    try {
+      localStorage.setItem('hyperpg-font-size', fontSize)
+    } catch {
+      // Font size remains active for this session if local storage is unavailable.
+    }
+  }, [fontSize])
+
+  useEffect(() => {
     try {
       localStorage.setItem('hyperpg-sidebar-width', String(sidebarWidth))
     } catch {
       // The current width remains active if local storage is unavailable.
     }
   }, [sidebarWidth])
+
+  useEffect(() => {
+    const keepSidebarWithinViewport = () => {
+      if (window.innerWidth <= 560) return
+      const maxWidth = Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, window.innerWidth - 320))
+      setSidebarWidth((width) => Math.min(width, maxWidth))
+    }
+    window.addEventListener('resize', keepSidebarWithinViewport)
+    return () => window.removeEventListener('resize', keepSidebarWithinViewport)
+  }, [])
 
   useEffect(() => {
     try {
@@ -170,7 +223,7 @@ function App() {
 
   const handleSidebarPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!resizingSidebar) return
-    setSidebarWidth(Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, event.clientX)))
+    setSidebarWidth(Math.min(sidebarMaxWidth, Math.max(SIDEBAR_MIN_WIDTH, event.clientX)))
   }
 
   const handleSidebarPointerUp = () => setResizingSidebar(false)
@@ -179,10 +232,10 @@ function App() {
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
       event.preventDefault()
       const direction = event.key === 'ArrowLeft' ? -1 : 1
-      setSidebarWidth((width) => Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width + direction * 16)))
+      setSidebarWidth((width) => Math.min(sidebarMaxWidth, Math.max(SIDEBAR_MIN_WIDTH, width + direction * 16)))
     } else if (event.key === 'Home' || event.key === 'End') {
       event.preventDefault()
-      setSidebarWidth(event.key === 'Home' ? SIDEBAR_MIN_WIDTH : SIDEBAR_MAX_WIDTH)
+      setSidebarWidth(event.key === 'Home' ? SIDEBAR_MIN_WIDTH : sidebarMaxWidth)
     }
   }
 
@@ -196,6 +249,49 @@ function App() {
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [showConnectionDialog, showSettingsDialog, connecting])
+
+  useEffect(() => {
+    if (!showConnectionDialog && !showSettingsDialog) return
+    const dialog = document.querySelector<HTMLElement>('.modal-backdrop [role="dialog"]')
+    const backdrop = dialog?.closest<HTMLElement>('.modal-backdrop')
+    if (!dialog || !backdrop) return
+
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const siblings = [...(backdrop.parentElement?.children ?? [])].filter((element) => element !== backdrop) as HTMLElement[]
+    const priorInertStates = siblings.map((element) => element.inert)
+    siblings.forEach((element) => { element.inert = true })
+
+    const focusableElements = () => [...dialog.querySelectorAll<HTMLElement>(
+      'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+    )].filter((element) => element.tabIndex >= 0 && element.getClientRects().length > 0)
+    const initialFocus = dialog.querySelector<HTMLElement>('#connection-url, input[autofocus], [role="radio"][aria-checked="true"]')
+      ?? focusableElements()[0]
+    initialFocus?.focus()
+
+    const keepFocusInDialog = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return
+      const focusable = focusableElements()
+      if (focusable.length === 0) { event.preventDefault(); dialog.focus(); return }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', keepFocusInDialog)
+
+    return () => {
+      document.removeEventListener('keydown', keepFocusInDialog)
+      siblings.forEach((element, index) => { element.inert = priorInertStates[index] })
+      const opener = showSettingsDialog ? settingsDialogOpener.current : connectionDialogOpener.current
+      if (opener?.isConnected) opener.focus()
+      else previouslyFocused?.focus()
+    }
+  }, [showConnectionDialog, showSettingsDialog])
 
   const filteredTables = useMemo(() => {
     const query = tableSearch.trim().toLowerCase()
@@ -278,13 +374,36 @@ function App() {
     action?.()
   }
 
-  const openConnectionDialog = () => guardNavigation(() => {
-    setConnectionError('')
-    setConnectionUrl('')
-    setConnectionName('')
-    setShowUrl(false)
-    setShowConnectionDialog(true)
-  })
+  const openConnectionDialog = () => {
+    connectionDialogOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    guardNavigation(() => {
+      setConnectionError('')
+      setConnectionUrl('')
+      setConnectionName('')
+      setShowUrl(false)
+      setShowConnectionDialog(true)
+    })
+  }
+
+  const openSettingsDialog = () => {
+    settingsDialogOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setShowSettingsDialog(true)
+  }
+
+  const handleTableViewKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+    const activeIndex = tabs.indexOf(document.activeElement as HTMLButtonElement)
+    if (activeIndex < 0) return
+    let nextIndex = activeIndex
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (activeIndex + 1) % tabs.length
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (activeIndex - 1 + tabs.length) % tabs.length
+    else if (event.key === 'Home') nextIndex = 0
+    else if (event.key === 'End') nextIndex = tabs.length - 1
+    else return
+    event.preventDefault()
+    tabs[nextIndex].focus()
+    tabs[nextIndex].click()
+  }
 
   const handleInstallUpdate = async () => {
     setInstallingUpdate(true)
@@ -465,7 +584,7 @@ function App() {
         )}
 
         <div className="sidebar-bottom">
-          <button className="settings-button" type="button" onClick={() => setShowSettingsDialog(true)}>
+          <button className="settings-button" type="button" onClick={openSettingsDialog}>
             <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><circle cx="9" cy="9" r="2.5" /><path d="m7.5 2.4.5-1h2l.5 1.6a6.6 6.6 0 0 1 1.4.8l1.6-.4 1 1.8-1.1 1.3c.2.6.3 1.2.3 1.8l1.1 1.3-1 1.8-1.6-.4c-.4.3-.9.6-1.4.8l-.5 1.6H8l-.5-1.6a6.6 6.6 0 0 1-1.4-.8l-1.6.4-1-1.8 1.1-1.3a5.5 5.5 0 0 1 0-1.8L3.5 5.2l1-1.8 1.6.4c.4-.3.9-.6 1.4-.8L8 1.4" transform="translate(0 1)" /></svg>
             <span>Settings</span>
           </button>
@@ -478,7 +597,7 @@ function App() {
         aria-controls="database-sidebar"
         aria-orientation="vertical"
         aria-valuemin={SIDEBAR_MIN_WIDTH}
-        aria-valuemax={SIDEBAR_MAX_WIDTH}
+        aria-valuemax={sidebarMaxWidth}
         aria-valuenow={sidebarWidth}
         aria-valuetext={`${sidebarWidth} pixels`}
         tabIndex={0}
@@ -519,10 +638,10 @@ function App() {
             {savedConnectionsError ? <div className="notice notice-error compact-notice" role="alert">{savedConnectionsError}</div> : null}
 
             <section className="workspace-section">
-              <div className="workspace-tabs" role="tablist" aria-label="Database views">
-                {selectedTable ? <div className="view-switcher" role="tablist" aria-label="Table view">
-                  <button type="button" role="tab" aria-selected={view === 'data'} className={view === 'data' ? 'is-selected' : ''} onClick={() => setView('data')}>Data</button>
-                  <button type="button" role="tab" aria-selected={view === 'structure'} className={view === 'structure' ? 'is-selected' : ''} onClick={() => guardNavigation(() => setView('structure'))}>Structure</button>
+              <div className="workspace-tabs">
+                {selectedTable ? <div className="view-switcher" role="tablist" aria-label="Table view" onKeyDown={handleTableViewKeyDown}>
+                  <button id="table-view-data-tab" type="button" role="tab" aria-controls="table-view-panel" aria-selected={view === 'data'} tabIndex={view === 'data' ? 0 : -1} className={view === 'data' ? 'is-selected' : ''} onClick={() => setView('data')}>Data</button>
+                  <button id="table-view-structure-tab" type="button" role="tab" aria-controls="table-view-panel" aria-selected={view === 'structure'} tabIndex={view === 'structure' ? 0 : -1} className={view === 'structure' ? 'is-selected' : ''} onClick={() => guardNavigation(() => setView('structure'))}>Structure</button>
                 </div> : null}
               </div>
 
@@ -546,7 +665,7 @@ function App() {
                   </div> : tablesError ? <div className="notice notice-error">{tablesError}</div> : tablesLoading ? <div className="overview-loading"><span className="spinner" />Reading database schema…</div> : <div className="empty-database"><span className="empty-database-icon"><DatabaseIcon /></span><strong>No tables</strong><span>Tables will appear here as soon as they’re available.</span></div>}
                 </div>
               ) : (
-                <div className="table-workspace">
+                <div className="table-workspace" id="table-view-panel" role="tabpanel" aria-labelledby={view === 'data' ? 'table-view-data-tab' : 'table-view-structure-tab'} tabIndex={0}>
                   <div className="table-title-row">
                     <div>
                       <div className="table-breadcrumb"><span>{selectedTable.schema}</span><svg viewBox="0 0 16 16" fill="none"><path d="m6 3 5 5-5 5" /></svg><span>table</span></div>
@@ -665,36 +784,49 @@ function App() {
           <div className="settings-section">
             <span className="field-label">Appearance</span>
             <div className="theme-options" role="radiogroup" aria-label="Color theme">
-              <button className={`theme-option ${theme === 'light' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'light'} onClick={() => setTheme('light')}>
+              <button className={`theme-option ${theme === 'light' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'light'} tabIndex={theme === 'light' ? 0 : -1} onKeyDown={(event) => handleRadioGroupKeyDown(event, themeValues, theme, setTheme)} onClick={() => setTheme('light')}>
                 <span className="theme-preview theme-preview-light"><i /><i /><i /><b /></span>
                 <span className="theme-option-copy"><strong>Light</strong><small>Soft, bright workspace</small></span>
                 <span className="theme-radio" />
               </button>
-              <button className={`theme-option ${theme === 'cream' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'cream'} onClick={() => setTheme('cream')}>
+              <button className={`theme-option ${theme === 'cream' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'cream'} tabIndex={theme === 'cream' ? 0 : -1} onKeyDown={(event) => handleRadioGroupKeyDown(event, themeValues, theme, setTheme)} onClick={() => setTheme('cream')}>
                 <span className="theme-preview theme-preview-cream"><i /><i /><i /><b /></span>
                 <span className="theme-option-copy"><strong>Cream</strong><small>Warm ivory and amber</small></span>
                 <span className="theme-radio" />
               </button>
-              <button className={`theme-option ${theme === 'dark' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'dark'} onClick={() => setTheme('dark')}>
+              <button className={`theme-option ${theme === 'dark' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'dark'} tabIndex={theme === 'dark' ? 0 : -1} onKeyDown={(event) => handleRadioGroupKeyDown(event, themeValues, theme, setTheme)} onClick={() => setTheme('dark')}>
                 <span className="theme-preview theme-preview-dark"><i /><i /><i /><b /></span>
                 <span className="theme-option-copy"><strong>Dark</strong><small>T3 Code charcoal</small></span>
                 <span className="theme-radio" />
               </button>
-              <button className={`theme-option ${theme === 'discord' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'discord'} onClick={() => setTheme('discord')}>
+              <button className={`theme-option ${theme === 'discord' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'discord'} tabIndex={theme === 'discord' ? 0 : -1} onKeyDown={(event) => handleRadioGroupKeyDown(event, themeValues, theme, setTheme)} onClick={() => setTheme('discord')}>
                 <span className="theme-preview theme-preview-discord"><i /><i /><i /><b /></span>
                 <span className="theme-option-copy"><strong>Discord</strong><small>Blurple dark workspace</small></span>
                 <span className="theme-radio" />
               </button>
             </div>
           </div>
+          <div className="settings-section font-size-section">
+            <span className="field-label">Font size</span>
+            <div className="theme-options font-size-options" role="radiogroup" aria-label="Font size">
+              {fontSizeValues.map((value) => {
+                const label = value === 'medium' ? 'Default' : value === 'small' ? 'Small' : 'Large'
+                const description = value === 'medium' ? 'Standard text' : value === 'small' ? 'Compact text' : 'Larger text'
+                return <button key={value} className={`theme-option ${fontSize === value ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={fontSize === value} tabIndex={fontSize === value ? 0 : -1} onKeyDown={(event) => handleRadioGroupKeyDown(event, fontSizeValues, fontSize, setFontSize)} onClick={() => setFontSize(value)}>
+                  <span className="theme-option-copy"><strong>{label}</strong><small>{description}</small></span>
+                  <span className="theme-radio" />
+                </button>
+              })}
+            </div>
+          </div>
           <div className="settings-section update-settings-section">
             <span className="field-label">Update channel</span>
             <div className="theme-options update-channel-options" role="radiogroup" aria-label="Update channel">
-              <button className={`theme-option ${updateChannel === 'stable' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={updateChannel === 'stable'} onClick={() => setUpdateChannel('stable')}>
+              <button className={`theme-option ${updateChannel === 'stable' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={updateChannel === 'stable'} tabIndex={updateChannel === 'stable' ? 0 : -1} onKeyDown={(event) => handleRadioGroupKeyDown(event, updateChannelValues, updateChannel, setUpdateChannel)} onClick={() => setUpdateChannel('stable')}>
                 <span className="theme-option-copy"><strong>Stable</strong><small>Tested releases</small></span>
                 <span className="theme-radio" />
               </button>
-              <button className={`theme-option ${updateChannel === 'nightly' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={updateChannel === 'nightly'} onClick={() => setUpdateChannel('nightly')}>
+              <button className={`theme-option ${updateChannel === 'nightly' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={updateChannel === 'nightly'} tabIndex={updateChannel === 'nightly' ? 0 : -1} onKeyDown={(event) => handleRadioGroupKeyDown(event, updateChannelValues, updateChannel, setUpdateChannel)} onClick={() => setUpdateChannel('nightly')}>
                 <span className="theme-option-copy"><strong>Nightly</strong><small>Latest daily build</small></span>
                 <span className="theme-radio" />
               </button>
@@ -704,7 +836,7 @@ function App() {
               <button className="update-check-button" type="button" disabled={checkingUpdates || installingUpdate} onClick={() => setUpdateRefreshKey((key) => key + 1)}>{checkingUpdates ? 'Checking' : 'Check now'}</button>
             </div>
           </div>
-          <div className="dialog-note settings-note"><svg viewBox="0 0 18 18" fill="none"><path d="M9 2.2 3.2 4.5v4.1c0 3.3 2.5 5.9 5.8 7.2 3.3-1.3 5.8-3.9 5.8-7.2V4.5L9 2.2Z" /><path d="m6.4 8.8 1.7 1.7 3.6-3.7" /></svg><span>Appearance and update channel are saved automatically on this device.</span></div>
+          <div className="dialog-note settings-note"><svg viewBox="0 0 18 18" fill="none"><path d="M9 2.2 3.2 4.5v4.1c0 3.3 2.5 5.9 5.8 7.2 3.3-1.3 5.8-3.9 5.8-7.2V4.5L9 2.2Z" /><path d="m6.4 8.8 1.7 1.7 3.6-3.7" /></svg><span>Appearance, font size, and update channel are saved automatically on this device.</span></div>
           <div className="dialog-actions"><button className="connect-button settings-done" type="button" onClick={() => setShowSettingsDialog(false)}>Done</button></div>
         </section>
       </div> : null}
