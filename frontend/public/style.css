@@ -605,6 +605,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(92, 187, 131
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+  .spinner, .tiny-spinner { animation-duration: .8s !important; animation-iteration-count: infinite !important; }
+  .button-spinner { animation-duration: .75s !important; animation-iteration-count: infinite !important; }
 }
 
 /* Neon console inspired database workspace */
