@@ -717,7 +717,6 @@ function App() {
                 </div>
               )}
             </section>
-            <footer className="main-footer"><span><span className="footer-led" />Connected to {selectedDatabase.name}</span><span>Changes apply when saved</span></footer>
           </div>
         ) : (
           <div className="welcome-area">
