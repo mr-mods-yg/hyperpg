@@ -13,9 +13,11 @@ const state = window.gridTestState = {
   rows: Array.from({ length: 30 }, (_, i) => [String(i + 1), i === 0 ? 'alpha' : i === 1 ? 'beta' : 'row ' + (i + 1), i === 0 ? 'hello, "world"\\nline' : null, i !== 0]),
   saves: [], failSave: false,
 };
-const connection = { id: 'test', name: 'Test database', host: 'localhost', database: 'test', username: 'test' };
+const connection = { id: 'test', name: 'Test database', host: 'localhost', database: 'test', username: 'test', showAllDatabases: false };
 export async function ListSavedConnections() { return [connection]; }
 export async function OpenSavedConnection() { return connection; }
+export async function ListDatabases() { return ['test']; }
+export async function OpenDatabase() { return 'test'; }
 export async function ListTables() { return ['items', 'other', 'empty'].map(name => ({ schema: 'public', name })); }
 export async function GetTableData(_id, _schema, table, limit, offset) {
   const rows = table === 'empty' ? [] : state.rows;

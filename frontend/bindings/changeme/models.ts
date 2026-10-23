@@ -16,6 +16,7 @@ export interface ConnectionInfo {
     "host": string;
     "database": string;
     "username": string;
+    "showAllDatabases": boolean;
 }
 
 /**

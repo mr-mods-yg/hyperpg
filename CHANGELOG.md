@@ -4,6 +4,26 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-10-23
+
+### Added
+
+- Connection context menus and editing for saved names, URLs, and database visibility.
+- A connections → databases → schemas → tables sidebar, with optional browsing of all accessible databases on a server.
+- Cream and Discord themes alongside Light and Dark, plus an adjustable font size in pixels.
+
+### Changed
+
+- Let the table workspace use 90% of the main pane and show its full context in breadcrumbs.
+- Widen Settings and arrange theme choices in a single row on desktop.
+- Simplify table borders and pagination, remove duplicate in-app branding and the connected-status badge, and hide static grid hints.
+- Use semantic versions for nightly releases.
+
+### Fixed
+
+- Detect newer nightly releases correctly, including sequence numbers with the same number of digits.
+- Restore sidebar resizing and save the chosen width on this device.
+
 ## [1.0.6] - 2026-10-22
 
 ### Fixed

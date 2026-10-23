@@ -25,8 +25,8 @@ export function CloseConnection(connectionID: string): $CancellablePromise<void>
 /**
  * Connect opens and verifies a PostgreSQL URL, then saves it securely on this device.
  */
-export function Connect(databaseURL: string, displayName: string): $CancellablePromise<$models.ConnectionInfo> {
-    return $Call.ByID(292084820, databaseURL, displayName);
+export function Connect(databaseURL: string, displayName: string, showAllDatabases: boolean): $CancellablePromise<$models.ConnectionInfo> {
+    return $Call.ByID(292084820, databaseURL, displayName, showAllDatabases);
 }
 
 /**
@@ -44,6 +44,13 @@ export function GetTableData(connectionID: string, schema: string, tableName: st
 }
 
 /**
+ * ListDatabases lists connectable user databases, or just the saved database.
+ */
+export function ListDatabases(connectionID: string): $CancellablePromise<string[] | null> {
+    return $Call.ByID(3418300580, connectionID);
+}
+
+/**
  * ListSavedConnections returns saved connection metadata without exposing URLs.
  */
 export function ListSavedConnections(): $CancellablePromise<$models.ConnectionInfo[] | null> {
@@ -55,6 +62,14 @@ export function ListSavedConnections(): $CancellablePromise<$models.ConnectionIn
  */
 export function ListTables(connectionID: string): $CancellablePromise<$models.TableInfo[] | null> {
     return $Call.ByID(179460911, connectionID);
+}
+
+/**
+ * OpenDatabase returns a live handle scoped to a database under a saved connection.
+ * The saved URL and default database are unchanged when browsing other databases.
+ */
+export function OpenDatabase(connectionID: string, database: string): $CancellablePromise<string> {
+    return $Call.ByID(523711787, connectionID, database);
 }
 
 /**
@@ -70,4 +85,12 @@ export function OpenSavedConnection(connectionID: string): $CancellablePromise<$
  */
 export function SaveTableChanges(connectionID: string, schema: string, tableName: string, changes: $models.TableChange[] | null): $CancellablePromise<void> {
     return $Call.ByID(2633861226, connectionID, schema, tableName, changes);
+}
+
+/**
+ * UpdateSavedConnection verifies and replaces a saved connection in place.
+ * An empty URL retains the encrypted URL without exposing its credentials.
+ */
+export function UpdateSavedConnection(connectionID: string, databaseURL: string, displayName: string, showAllDatabases: boolean): $CancellablePromise<$models.ConnectionInfo> {
+    return $Call.ByID(2215518718, connectionID, databaseURL, displayName, showAllDatabases);
 }

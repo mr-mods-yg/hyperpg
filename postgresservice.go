@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 // PostgresService manages live database connections and saved local connections.
@@ -24,11 +24,12 @@ type PostgresService struct {
 }
 
 type ConnectionInfo struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Host     string `json:"host"`
-	Database string `json:"database"`
-	Username string `json:"username"`
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Host             string `json:"host"`
+	Database         string `json:"database"`
+	Username         string `json:"username"`
+	ShowAllDatabases bool   `json:"showAllDatabases"`
 }
 
 type TableInfo struct {
@@ -53,7 +54,7 @@ type TableData struct {
 }
 
 // Connect opens and verifies a PostgreSQL URL, then saves it securely on this device.
-func (s *PostgresService) Connect(databaseURL, displayName string) (ConnectionInfo, error) {
+func (s *PostgresService) Connect(databaseURL, displayName string, showAllDatabases bool) (ConnectionInfo, error) {
 	db, parsed, database, err := openPostgresDatabase(databaseURL)
 	if err != nil {
 		return ConnectionInfo{}, err
@@ -65,10 +66,11 @@ func (s *PostgresService) Connect(databaseURL, displayName string) (ConnectionIn
 	}
 
 	info := ConnectionInfo{
-		ID:       hex.EncodeToString(idBytes),
-		Name:     strings.TrimSpace(displayName),
-		Host:     parsed.Hostname(),
-		Database: database,
+		ID:               hex.EncodeToString(idBytes),
+		Name:             strings.TrimSpace(displayName),
+		Host:             parsed.Hostname(),
+		Database:         database,
+		ShowAllDatabases: showAllDatabases,
 	}
 	if info.Name == "" {
 		info.Name = database
@@ -86,6 +88,146 @@ func (s *PostgresService) Connect(databaseURL, displayName string) (ConnectionIn
 	s.mu.Unlock()
 
 	return info, nil
+}
+
+// UpdateSavedConnection verifies and replaces a saved connection in place.
+// An empty URL retains the encrypted URL without exposing its credentials.
+func (s *PostgresService) UpdateSavedConnection(connectionID, databaseURL, displayName string, showAllDatabases bool) (ConnectionInfo, error) {
+	record, err := s.store.get(connectionID)
+	if err != nil {
+		return ConnectionInfo{}, err
+	}
+	databaseURL = strings.TrimSpace(databaseURL)
+	if databaseURL == "" {
+		databaseURL = record.DatabaseURL
+	}
+	db, parsed, database, err := openPostgresDatabase(databaseURL)
+	if err != nil {
+		return ConnectionInfo{}, err
+	}
+	info := ConnectionInfo{ID: connectionID, Name: strings.TrimSpace(displayName), Host: parsed.Hostname(), Database: database, ShowAllDatabases: showAllDatabases}
+	if info.Name == "" {
+		info.Name = database
+	}
+	if parsed.User != nil {
+		info.Username = parsed.User.Username()
+	}
+	s.mu.Lock()
+	// Do not recreate a connection removed while its replacement was opening.
+	if _, err := s.store.get(connectionID); err != nil {
+		s.mu.Unlock()
+		db.Close()
+		return ConnectionInfo{}, err
+	}
+	if err := s.store.save(storedConnection{Info: info, DatabaseURL: databaseURL}); err != nil {
+		s.mu.Unlock()
+		db.Close()
+		return ConnectionInfo{}, fmt.Errorf("Could not save this connection securely: %w", err)
+	}
+	previous := s.removeConnectionHandles(connectionID)
+	s.connections[connectionID] = db
+	s.mu.Unlock()
+	for _, handle := range previous {
+		_ = handle.Close()
+	}
+	return info, nil
+}
+
+// ListDatabases lists connectable user databases, or just the saved database.
+func (s *PostgresService) ListDatabases(connectionID string) ([]string, error) {
+	info, err := s.OpenSavedConnection(connectionID)
+	if err != nil {
+		return nil, err
+	}
+	if !info.ShowAllDatabases {
+		return []string{info.Database}, nil
+	}
+	db, err := s.connection(connectionID)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	rows, err := db.QueryContext(ctx, `SELECT datname FROM pg_database
+		WHERE datallowconn AND NOT datistemplate AND has_database_privilege(oid, 'CONNECT')
+		ORDER BY datname`)
+	if err != nil {
+		return nil, fmt.Errorf("Could not list databases: %w", err)
+	}
+	defer rows.Close()
+	databases := make([]string, 0)
+	for rows.Next() {
+		var database string
+		if err := rows.Scan(&database); err != nil {
+			return nil, fmt.Errorf("Could not read the database list: %w", err)
+		}
+		databases = append(databases, database)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("Could not read the database list: %w", err)
+	}
+	return databases, nil
+}
+
+// OpenDatabase returns a live handle scoped to a database under a saved connection.
+// The saved URL and default database are unchanged when browsing other databases.
+func (s *PostgresService) OpenDatabase(connectionID, database string) (string, error) {
+	if database == "" {
+		return "", fmt.Errorf("Choose a database to open")
+	}
+	info, err := s.OpenSavedConnection(connectionID)
+	if err != nil {
+		return "", err
+	}
+	if database == info.Database {
+		return connectionID, nil
+	}
+	if !info.ShowAllDatabases {
+		return "", fmt.Errorf("Enable Show all databases to open another database")
+	}
+	base, err := s.connection(connectionID)
+	if err != nil {
+		return "", err
+	}
+	handleID := connectionID + ":" + database
+	s.mu.RLock()
+	_, alreadyOpen := s.connections[handleID]
+	s.mu.RUnlock()
+	if alreadyOpen {
+		return handleID, nil
+	}
+	record, err := s.store.get(connectionID)
+	if err != nil {
+		return "", err
+	}
+	config, err := pgx.ParseConfig(record.DatabaseURL)
+	if err != nil {
+		return "", fmt.Errorf("Could not read the saved connection URL")
+	}
+	// The parsed configuration preserves credentials and URL options without
+	// treating database names as SQL or URL syntax.
+	config.Database = database
+	db := sql.OpenDB(stdlib.GetConnector(*config))
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
+		db.Close()
+		return "", fmt.Errorf("Could not open database %s: %s", database, safeConnectionError(err))
+	}
+	s.mu.Lock()
+	if s.connections[connectionID] != base {
+		s.mu.Unlock()
+		db.Close()
+		return "", fmt.Errorf("The connection changed; open the database again")
+	}
+	if _, alreadyOpen := s.connections[handleID]; alreadyOpen {
+		s.mu.Unlock()
+		db.Close()
+	} else {
+		s.connections[handleID] = db
+		s.mu.Unlock()
+	}
+	return handleID, nil
 }
 
 // ListSavedConnections returns saved connection metadata without exposing URLs.
@@ -121,6 +263,12 @@ func (s *PostgresService) OpenSavedConnection(connectionID string) (ConnectionIn
 		return ConnectionInfo{}, err
 	}
 	s.mu.Lock()
+	current, err := s.store.get(connectionID)
+	if err != nil || current.DatabaseURL != record.DatabaseURL {
+		s.mu.Unlock()
+		db.Close()
+		return ConnectionInfo{}, fmt.Errorf("The saved connection changed; open it again")
+	}
 	if _, alreadyOpen := s.connections[connectionID]; alreadyOpen {
 		s.mu.Unlock()
 		_ = db.Close()
@@ -134,17 +282,15 @@ func (s *PostgresService) OpenSavedConnection(connectionID string) (ConnectionIn
 
 // DeleteSavedConnection removes a saved record and closes its live connection.
 func (s *PostgresService) DeleteSavedConnection(connectionID string) error {
+	s.mu.Lock()
 	if err := s.store.delete(connectionID); err != nil {
+		s.mu.Unlock()
 		return err
 	}
-	s.mu.Lock()
-	db, ok := s.connections[connectionID]
-	if ok {
-		delete(s.connections, connectionID)
-	}
+	handles := s.removeConnectionHandles(connectionID)
 	s.mu.Unlock()
-	if ok {
-		return db.Close()
+	for _, db := range handles {
+		_ = db.Close()
 	}
 	return nil
 }
@@ -297,15 +443,27 @@ func (s *PostgresService) GetTableData(connectionID, schema, tableName string, l
 // CloseConnection releases a connection and removes it from the active list.
 func (s *PostgresService) CloseConnection(connectionID string) error {
 	s.mu.Lock()
-	db, ok := s.connections[connectionID]
-	if ok {
-		delete(s.connections, connectionID)
-	}
+	handles := s.removeConnectionHandles(connectionID)
 	s.mu.Unlock()
-	if !ok {
-		return nil
+	var firstErr error
+	for _, db := range handles {
+		if err := db.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
 	}
-	return db.Close()
+	return firstErr
+}
+
+// removeConnectionHandles requires s.mu and removes the default and child pools.
+func (s *PostgresService) removeConnectionHandles(connectionID string) []*sql.DB {
+	var handles []*sql.DB
+	for id, db := range s.connections {
+		if id == connectionID || strings.HasPrefix(id, connectionID+":") {
+			handles = append(handles, db)
+			delete(s.connections, id)
+		}
+	}
+	return handles
 }
 
 // ServiceShutdown closes all remaining database handles when the app exits.
@@ -349,6 +507,11 @@ func openPostgresDatabase(databaseURL string) (*sql.DB, *url.URL, string, error)
 	if database == "" {
 		return nil, nil, "", fmt.Errorf("The connection URL needs a database name")
 	}
+	config, err := pgx.ParseConfig(trimmedURL)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("Enter a valid PostgreSQL URL")
+	}
+	database = config.Database
 	db, err := sql.Open("pgx", trimmedURL)
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("Could not open the database connection")
