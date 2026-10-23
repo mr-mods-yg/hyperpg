@@ -23,6 +23,8 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ### Fixed
 
+- Remove duplicate in-app branding and the green connected-status badge.
+- Simplify table-view borders and remove the duplicate row range from pagination.
 - Correctly detect newer nightly releases whose sequence number has the same number of digits.
 - Restore sidebar resizing by preventing a fixed width from overriding the dragged width.
 - Simplify sidebar table navigation to name labels without column dropdowns.

@@ -564,13 +564,6 @@ function App() {
   return (
     <div className={`app-shell ${resizingSidebar ? 'is-resizing-sidebar' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
       <aside className={`sidebar ${mobileNavOpen ? 'is-mobile-open' : ''}`} id="database-sidebar">
-        <div className="brand-row">
-          <div className="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M5 5.5h14v4H5zM5 14.5h6v4H5zM14 14.5h5v4h-5z" fill="currentColor" /></svg>
-          </div>
-          <span className="brand-name">hyperpg</span>
-        </div>
-
         <div className="sidebar-section-heading">
           <span>Connections</span>
           <button className="icon-button add-connection" type="button" onClick={openConnectionDialog} aria-label="Add a database connection" title="Add connection">
@@ -625,10 +618,9 @@ function App() {
             <button className="mobile-nav-button" type="button" onClick={() => setMobileNavOpen((open) => !open)} aria-label="Open navigation" aria-expanded={mobileNavOpen}>
               <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M3 5h12M3 9h12M3 13h12" /></svg>
             </button>
-            {activeConnection ? <><span className="crumb-muted">{activeConnection.name}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className={selectedTable ? 'crumb-muted' : 'crumb-current'}>{selectedDatabase.name}</span>{selectedTable ? <><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-muted">{selectedTable.schema}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-current">{selectedTable.name}</span></> : null}</> : <span className="crumb-current">hyperpg</span>}
+            {activeConnection ? <><span className="crumb-muted">{activeConnection.name}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className={selectedTable ? 'crumb-muted' : 'crumb-current'}>{selectedDatabase.name}</span>{selectedTable ? <><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-muted">{selectedTable.schema}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-current">{selectedTable.name}</span></> : null}</> : null}
           </div>
           <div className="topbar-right">
-            {activeConnection ? <span className="status-pill" title="Connected" aria-label="Connected"><span className="status-dot" /></span> : null}
             <button className="topbar-add" type="button" onClick={openConnectionDialog}><span>＋</span> Add connection</button>
           </div>
         </header>
@@ -647,7 +639,7 @@ function App() {
 
             {savedConnectionsError ? <div className="notice notice-error compact-notice" role="alert">{savedConnectionsError}</div> : null}
 
-            <section className="workspace-section">
+            <section className={`workspace-section ${selectedTable ? 'has-selected-table' : ''}`}>
               <div className="workspace-tabs">
                 {selectedTable ? <div className="view-switcher" role="tablist" aria-label="Table view" onKeyDown={handleTableViewKeyDown}>
                   <button id="table-view-data-tab" type="button" role="tab" aria-controls="table-view-panel" aria-selected={view === 'data'} tabIndex={view === 'data' ? 0 : -1} className={view === 'data' ? 'is-selected' : ''} onClick={() => setView('data')}>Data</button>
@@ -681,7 +673,7 @@ function App() {
                 <div className="table-workspace" id="table-view-panel" role="tabpanel" aria-labelledby={view === 'data' ? 'table-view-data-tab' : 'table-view-structure-tab'} tabIndex={0}>
                   {view === 'data' ? <>
                     <div className="table-toolbar">
-                      <div className="toolbar-description"><span className="green-square" />{tableData ? `${pageStart.toLocaleString()}–${pageEnd.toLocaleString()} of ${tableData.rowCount.toLocaleString()} rows` : 'Table data'}</div>
+                      <div className="toolbar-description">{tableData ? `${pageStart.toLocaleString()}–${pageEnd.toLocaleString()} of ${tableData.rowCount.toLocaleString()} rows` : 'Table data'}</div>
                       <label className="row-search"><svg viewBox="0 0 18 18" fill="none"><circle cx="8" cy="8" r="5.4" /><path d="m12 12 3.2 3.2" /></svg><input value={rowSearch} onChange={(event) => setRowSearch(event.target.value)} placeholder="Search this page" aria-label="Search this page" /></label>
                     </div>
                     {tableError ? <div className="notice notice-error">{tableError}</div> : null}
@@ -699,7 +691,6 @@ function App() {
                       <label className="page-size-control"><span>Rows per page</span><select aria-label="Rows per page" value={pageSize} disabled={savingChanges} onChange={(event) => { const size = Number(event.target.value); guardNavigation(() => { setPageSize(size); setPageOffset(0) }) }}>
                         {[25, 50, 100, 250, 500].map((size) => <option key={size} value={size}>{size}</option>)}
                       </select></label>
-                      <span className="pagination-range">{pageStart.toLocaleString()}–{pageEnd.toLocaleString()} of {tableData.rowCount.toLocaleString()}</span>
                       <div className="pagination-actions">
                         <button className="pagination-button" type="button" aria-label="Previous page" disabled={tableLoading || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset((offset) => Math.max(0, offset - pageSize)))}>Previous</button>
                         <button className="pagination-button" type="button" aria-label="Next page" disabled={tableLoading || savingChanges || pageOffset + pageSize >= tableData.rowCount} onClick={() => guardNavigation(() => setPageOffset((offset) => offset + pageSize))}>Next</button>
@@ -730,7 +721,6 @@ function App() {
               <p>Paste a PostgreSQL connection URL to browse its schemas, tables, and rows.</p>
               <button className="welcome-cta" type="button" onClick={openConnectionDialog}><span>＋</span> Add a connection</button>
             </div>
-            <div className="welcome-bottom"><span>Built for the shape of your data</span><span>hyperpg <i /> PostgreSQL explorer</span></div>
           </div>
         )}
       </main>
@@ -789,7 +779,7 @@ function App() {
         <section className="connection-dialog settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
           <button className="dialog-close" type="button" aria-label="Close settings" onClick={() => setShowSettingsDialog(false)}><svg viewBox="0 0 18 18" fill="none"><path d="m4 4 10 10M14 4 4 14" /></svg></button>
           <div className="dialog-icon settings-icon"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.4v1.4M10 16.2v1.4M17.6 10h-1.4M3.8 10H2.4m13-5.4-1 1m-8.8 8.8-1 1m10.8 0-1-1m-8.8-8.8-1-1" /><circle cx="10" cy="10" r="4.2" /></svg></div>
-          <div className="dialog-heading"><h2 id="settings-title">Settings</h2><p>Control how hyperpg looks and updates.</p></div>
+          <div className="dialog-heading"><h2 id="settings-title">Settings</h2><p>Adjust appearance and update preferences.</p></div>
           <div className="settings-section">
             <span className="field-label">Appearance</span>
             <div className="theme-options" role="radiogroup" aria-label="Color theme">
@@ -837,7 +827,7 @@ function App() {
               </button>
             </div>
             <div className="update-check-row">
-              <span className={updateCheckError ? 'update-check-message is-error' : 'update-check-message'} role={updateCheckError ? 'alert' : 'status'}>{updateCheckError || (checkingUpdates ? 'Checking for updates…' : updateCheckMessage || 'Checks when hyperpg starts.')}</span>
+              <span className={updateCheckError ? 'update-check-message is-error' : 'update-check-message'} role={updateCheckError ? 'alert' : 'status'}>{updateCheckError || (checkingUpdates ? 'Checking for updates…' : updateCheckMessage || 'Checks automatically at startup.')}</span>
               <button className="update-check-button" type="button" disabled={checkingUpdates || installingUpdate} onClick={() => setUpdateRefreshKey((key) => key + 1)}>{checkingUpdates ? 'Checking' : 'Check now'}</button>
             </div>
           </div>

@@ -1941,3 +1941,35 @@ textarea:focus-visible,
   .workspace-tabs { padding-inline: 8px; }
   .theme-preview { height: 48px; }
 }
+
+/* Keep selected table views free of nested header and footer boxes. */
+.workspace-section.has-selected-table {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.workspace-section.has-selected-table .table-toolbar {
+  padding: 0 0 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.workspace-section.has-selected-table .data-grid-wrap {
+  border: 0;
+  border-radius: 0;
+}
+
+.workspace-section.has-selected-table .grid-pagination {
+  margin-top: 12px;
+  padding-inline: 0;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.workspace-section.has-selected-table .pagination-actions {
+  margin-left: auto;
+}
