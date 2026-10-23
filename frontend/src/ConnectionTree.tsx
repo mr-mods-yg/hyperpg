@@ -176,6 +176,12 @@ function DatabaseBranch(props: BranchProps & { database: string }) {
   }, [expanded, connection.id, database, refreshKey])
 
   const filtered = tables.filter((table) => !search || `${table.schema}.${table.name}`.toLowerCase().includes(search))
+  const schemas = new Map<string, TableInfo[]>()
+  for (const table of filtered) {
+    const schemaTables = schemas.get(table.schema) ?? []
+    schemaTables.push(table)
+    schemas.set(table.schema, schemaTables)
+  }
   return <div className="database-branch">
     <button className={`database-nav-item ${active ? 'is-active' : ''}`} type="button" aria-label={`Open ${database} database`} aria-expanded={expanded} aria-controls={groupId} onClick={() => {
       setExpanded((value) => !value)
@@ -186,19 +192,44 @@ function DatabaseBranch(props: BranchProps & { database: string }) {
       <span>{database}</span>
       {tables.length && expanded ? <small>{tables.length}</small> : null}
     </button>
-    {expanded ? <div className="database-tables" id={groupId} role="group" aria-label={`Tables in ${database}`}>
-      {loading ? <div className="sidebar-loading"><span className="tiny-spinner" />Loading tables</div> : error ? <div className="sidebar-error" role="alert">{error}</div> : filtered.map((table) => {
-        const selected = active && selectedTable?.schema === table.schema && selectedTable.name === table.name
-        return <div className={`table-nav-entry ${selected ? 'is-current' : ''}`} key={`${table.schema}.${table.name}`}>
+    {expanded ? <div className="database-schemas" id={groupId} role="group" aria-label={`Schemas in ${database}`}>
+      {loading ? <div className="sidebar-loading"><span className="tiny-spinner" />Loading tables</div> : error ? <div className="sidebar-error" role="alert">{error}</div> : [...schemas].sort(([a], [b]) => a.localeCompare(b)).map(([schema, schemaTables]) => <SchemaBranch
+        key={schema} connection={connection} database={database} schema={schema} tables={schemaTables}
+        active={active} selectedTable={selectedTable} search={search} onSelectDatabase={props.onSelectDatabase}
+      />)}
+      {!loading && !error && !filtered.length ? <div className="sidebar-empty-tables">{search ? 'No matching tables' : 'No tables found'}</div> : null}
+    </div> : null}
+  </div>
+}
+
+function SchemaBranch({ connection, database, schema, tables, active, selectedTable, search, onSelectDatabase }: Pick<Props, 'selectedTable' | 'onSelectDatabase'> & {
+  connection: ConnectionInfo; database: string; schema: string; tables: TableInfo[]; active: boolean; search: string
+}) {
+  const [expanded, setExpanded] = useState(true)
+  const groupId = useId()
+  const selectedSchema = active && selectedTable?.schema === schema
+  const visible = expanded || !!search
+
+  useEffect(() => { if (selectedSchema) setExpanded(true) }, [selectedSchema, selectedTable?.name])
+
+  return <div className="schema-branch">
+    <button className={`database-nav-item schema-nav-item ${selectedSchema ? 'is-active' : ''}`} type="button" aria-label={`Toggle ${schema} schema`} aria-expanded={visible} aria-controls={groupId} onClick={() => setExpanded((value) => !value)}>
+      <Chevron expanded={visible} />
+      <svg className="schema-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m3 5 5-3 5 3v6l-5 3-5-3zM3 5l5 3 5-3M8 8v6" /></svg>
+      <span>{schema}</span><small>{tables.length}</small>
+    </button>
+    {visible ? <div className="schema-tables" id={groupId} role="group" aria-label={`Tables in ${schema} schema`}>
+      {tables.map((table) => {
+        const selected = selectedSchema && selectedTable?.name === table.name
+        return <div className={`table-nav-entry ${selected ? 'is-current' : ''}`} key={table.name}>
           <div className="table-nav-row">
-            <button className="table-nav-item" type="button" aria-current={selected ? 'page' : undefined} aria-label={`Open ${table.name} table`} title={`${table.schema}.${table.name}`} onClick={() => { if (!selected) props.onSelectDatabase(connection, database, table) }}>
+            <button className="table-nav-item" type="button" aria-current={selected ? 'page' : undefined} aria-label={`Open ${table.name} table`} title={`${schema}.${table.name}`} onClick={() => { if (!selected) onSelectDatabase(connection, database, table) }}>
               <span className="table-grid-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none"><rect x="2.5" y="3" width="11" height="10" rx="1.5" /><path d="M2.5 6.5h11M6.2 6.5V13" /></svg></span>
-              <span>{table.name}</span><small className="table-schema">{table.schema}</small>
+              <span>{table.name}</span>
             </button>
           </div>
         </div>
       })}
-      {!loading && !error && !filtered.length ? <div className="sidebar-empty-tables">{search ? 'No matching tables' : 'No tables found'}</div> : null}
     </div> : null}
   </div>
 }

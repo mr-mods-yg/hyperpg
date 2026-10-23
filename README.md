@@ -64,7 +64,7 @@ Notable changes are tracked in [CHANGELOG.md](CHANGELOG.md), using the [Keep a C
 
 ## Working with table data
 
-- The sidebar groups tables under **connection → database → table**. Expand a connection or database to browse it; table labels also show their schema.
+- The sidebar groups tables under **connection → database → schema → table**. Expand a connection, database, or schema to browse it. Drag the sidebar divider to resize it; its width is saved on this device.
 - Right-click a connection for **Open**, **Edit**, or **Delete**, or use the edit and delete buttons beside its name. Edit supports renaming and replacing the connection URL; leave the URL blank to keep the saved one.
 - **Show all databases**, available when adding or editing a connection, lists the accessible databases on that server. When off, only the database in the connection URL is shown.
 

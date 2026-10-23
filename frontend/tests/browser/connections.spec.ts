@@ -31,11 +31,11 @@ export async function OpenDatabase(id, database) {
   if (connection.database !== database && !connection.showAllDatabases) throw new Error('Enable Show all databases');
   return database === connection.database ? id : id + ':' + database;
 }
-export async function ListTables(id) { return ['items', 'other'].map(name => ({ schema: 'public', name })); }
+export async function ListTables(id) { return [{ schema: 'audit', name: 'items' }, ...['items', 'other'].map(name => ({ schema: 'public', name }))]; }
 export async function GetTableData(id, schema, table) {
   state.reads.push([id, schema, table]);
   return { columns: [{ name: 'value', dataType: 'text', nullable: false, hasDefault: false, generated: false, autoIncrement: false }],
-    rows: [[id + '/' + table]], rowCount: 1, identities: [{ tableOID: '1', ctid: '(0,1)', version: '42' }] };
+    rows: [[id + '/' + (schema === 'public' ? '' : schema + '/') + table]], rowCount: 1, identities: [{ tableOID: '1', ctid: '(0,1)', version: '42' }] };
 }
 export async function SaveTableChanges(...args) { state.saves.push(structuredClone(args)); }
 export async function UpdateSavedConnection(id, url, name, showAllDatabases) {
@@ -59,7 +59,8 @@ export async function CloseConnection() {}
 
 const connections = (page: Page) => page.getByRole('navigation', { name: 'Connections', exact: true })
 const databases = (page: Page, name = 'Development') => connections(page).getByRole('group', { name: `Databases in ${name}`, exact: true })
-const tables = (page: Page, name = 'app') => databases(page).getByRole('group', { name: `Tables in ${name}`, exact: true })
+const schemas = (page: Page, name = 'app') => databases(page).getByRole('group', { name: `Schemas in ${name}`, exact: true })
+const tables = (page: Page, name = 'app', schema = 'public') => schemas(page, name).getByRole('group', { name: `Tables in ${schema} schema`, exact: true })
 const state = (page: Page) => page.evaluate(() => (window as any).connectionTestState)
 
 test.beforeEach(async ({ page }) => {
@@ -69,7 +70,7 @@ test.beforeEach(async ({ page }) => {
   await expect(tables(page).getByRole('button', { name: 'Open items table', exact: true })).toBeVisible()
 })
 
-test('connections expand into databases and tables, with edit beside delete', async ({ page }) => {
+test('connections expand into databases, schemas and tables, with edit beside delete', async ({ page }) => {
   await expect(connections(page).getByRole('button', { name: 'Select Development', exact: true })).toHaveAttribute('aria-expanded', 'true')
   await expect(databases(page).getByRole('button', { name: 'Open app database', exact: true })).toBeVisible()
   await expect(databases(page).getByRole('button', { name: 'Open analytics database', exact: true })).toHaveCount(0)
@@ -82,6 +83,59 @@ test('connections expand into databases and tables, with edit beside delete', as
   await connections(page).getByRole('button', { name: 'Select Development', exact: true }).click({ button: 'right' })
   await page.getByRole('menuitem', { name: 'Open connection', exact: true }).click()
   await expect(tables(page).getByRole('button', { name: 'Open items table', exact: true })).toBeVisible()
+})
+
+test('schema groups collapse and search independently, and same-named tables use their own schema', async ({ page }) => {
+  const publicSchema = schemas(page).getByRole('button', { name: 'Toggle public schema', exact: true })
+  await publicSchema.click()
+  await expect(publicSchema).toHaveAttribute('aria-expanded', 'false')
+  await expect(tables(page)).toHaveCount(0)
+  await expect(tables(page, 'app', 'audit').getByRole('button', { name: 'Open items table', exact: true })).toBeVisible()
+  await page.getByRole('textbox', { name: 'Find a table', exact: true }).fill('public.items')
+  await expect(tables(page).getByRole('button', { name: 'Open items table', exact: true })).toBeVisible()
+  await expect(schemas(page).getByRole('button', { name: 'Toggle audit schema', exact: true })).toHaveCount(0)
+  await page.getByRole('textbox', { name: 'Find a table', exact: true }).fill('')
+  await publicSchema.click()
+  await tables(page).getByRole('button', { name: 'Open items table', exact: true }).click()
+  await expect(page.getByRole('gridcell')).toHaveText('primary/items')
+  await tables(page, 'app', 'audit').getByRole('button', { name: 'Open items table', exact: true }).click()
+  await expect(page.getByRole('gridcell')).toHaveText('primary/audit/items')
+  await page.getByRole('gridcell').dblclick()
+  await page.getByRole('textbox', { name: 'Edit value', exact: true }).fill('audit edit')
+  await page.keyboard.press('Enter')
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  expect((await state(page)).saves[0].slice(0, 3)).toEqual(['primary', 'audit', 'items'])
+})
+
+test('dragging the divider changes the actual sidebar width, clamps it, and persists it', async ({ page }) => {
+  const sidebar = page.locator('#database-sidebar')
+  const divider = page.getByRole('separator', { name: 'Resize sidebar', exact: true })
+  const bounds = await divider.boundingBox()
+  const y = bounds!.y + bounds!.height / 2
+  const width = async () => (await sidebar.boundingBox())!.width
+  await page.mouse.move(bounds!.x + bounds!.width / 2, y)
+  await page.mouse.down()
+  await page.mouse.move(350, y, { steps: 10 })
+  await expect.poll(width).toBe(350)
+  await expect(divider).toHaveAttribute('aria-valuenow', '350')
+  await page.mouse.move(900, y, { steps: 10 })
+  await expect.poll(width).toBe(420)
+  await page.mouse.move(50, y, { steps: 10 })
+  await expect.poll(width).toBe(190)
+  await page.mouse.up()
+  await expect(page.locator('.app-shell')).not.toHaveClass(/is-resizing-sidebar/)
+  await page.reload()
+  await expect.poll(width).toBe(190)
+  await divider.focus()
+  await page.keyboard.press('End')
+  await expect.poll(width).toBe(420)
+  await page.keyboard.press('Home')
+  await page.keyboard.press('ArrowRight')
+  await expect.poll(width).toBe(206)
+  await page.keyboard.press('End')
+  await page.setViewportSize({ width: 600, height: 900 })
+  await expect.poll(width).toBe(280)
+  await expect(divider).toHaveAttribute('aria-valuenow', '280')
 })
 
 test('right click and keyboard menus edit without selecting another connection and dismiss cleanly', async ({ page }) => {

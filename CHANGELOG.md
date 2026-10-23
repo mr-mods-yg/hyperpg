@@ -7,7 +7,7 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 ### Added
 
 - Connection context menus and editing for saved names, URLs, and database visibility.
-- A nested connections → databases → tables sidebar, with optional browsing of all accessible databases on a server.
+- A nested connections → databases → schemas → tables sidebar, with optional browsing of all accessible databases on a server.
 - Multi-cell selection with drag, Shift, Ctrl/Cmd, arrow keys, and CSV clipboard copying.
 - Editable table cells with staged changes, Save/Discard controls, and unsaved-change navigation prompts.
 - Row context menus for adding, duplicating, deleting, restoring, setting NULL, and reverting cells.
@@ -19,6 +19,7 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ### Fixed
 
+- Restore sidebar resizing by preventing a fixed width from overriding the dragged width.
 - Simplify sidebar table navigation to name labels without column dropdowns.
 - Expand the focus border around the full cell selection, including separate ranges, without outlines around interior cells.
 - Preserve exact large integers, decimal values, arrays, and binary values when reading table data.
