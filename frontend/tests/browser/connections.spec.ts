@@ -229,7 +229,7 @@ test('same-named tables read and save through the selected database and protect 
   await page.keyboard.press('Enter')
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
   expect((await state(page)).saves[1][0]).toBe('primary:analytics')
-  await expect(page.locator('.main-footer')).toContainText('Connected to analytics')
+  await expect(page.locator('.main-footer')).toHaveCount(0)
   await expect(page.locator('.breadcrumbs')).toHaveText('Developmentanalyticsitems')
 })
 
