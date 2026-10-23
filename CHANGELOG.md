@@ -10,6 +10,7 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 - A nested connections → databases → schemas → tables sidebar, with optional browsing of all accessible databases on a server.
 - A more compact Settings dialog that takes less space without compressing its option cards.
 - A cleaner table workspace without the connection and save-state footer text.
+- Grid selection and keyboard hints stay hidden until there is feedback to show.
 - Multi-cell selection with drag, Shift, Ctrl/Cmd, arrow keys, and CSV clipboard copying.
 - Editable table cells with staged changes, Save/Discard controls, and unsaved-change navigation prompts.
 - Row context menus for adding, duplicating, deleting, restoring, setting NULL, and reverting cells.

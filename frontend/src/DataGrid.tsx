@@ -259,7 +259,7 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
     <div className="grid-actions">
       <button className="pagination-button" type="button" onClick={() => addRow()} disabled={saving || !data.columns.length}>＋ Add row</button>
       <button className="pagination-button" type="button" onClick={() => void copySelection()} disabled={!selection.size || saving}>Copy CSV</button>
-      <span className="grid-selection-count">{selection.size ? `${selection.size} selected` : 'Drag to select · Double-click to edit'}</span>
+      {selection.size ? <span className="grid-selection-count">{selection.size} selected</span> : null}
     </div>
     {dirty ? <div className="grid-change-bar" role="status">
       <span>{changes.length} unsaved {changes.length === 1 ? 'row change' : 'row changes'}</span>
@@ -323,7 +323,7 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
         {!visibleRows.length ? <div className="empty-table">{search ? 'No rows match your search.' : 'This table has no rows yet. Use Add row to create one.'}</div> : null}
       </div>
     </div>
-    <div className="grid-feedback" role="status" aria-live="polite">{message || 'Ctrl/Cmd+C copies CSV · Enter/F2 edits · Shift+Enter adds a line · Ctrl/Cmd+S saves'}</div>
+    {message ? <div className="grid-feedback" role="status" aria-live="polite">{message}</div> : null}
     {menu ? <div className="grid-context-menu" role="menu" aria-label="Cell actions" ref={menuRef} style={{ left: menu.x, top: menu.y }} onKeyDown={(event) => {
       if (event.key === 'Escape') { event.preventDefault(); setMenu(null); if (active) focusCell(active) }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
