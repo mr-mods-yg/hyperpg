@@ -1,17 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { PostgresService, UpdateService } from '../bindings/changeme'
 import DataGrid, { type DataGridHandle } from './DataGrid'
 import type { TableData } from './grid'
+import ConnectionTree, { type ConnectionInfo, type TableInfo } from './ConnectionTree'
 
-type ConnectionInfo = {
-  id: string
-  name: string
-  host: string
-  database: string
-  username: string
-}
-
-type TableInfo = { schema: string; name: string }
 type View = 'data' | 'structure'
 type Theme = 'light' | 'dark' | 'cream' | 'discord'
 type UpdateChannel = 'stable' | 'nightly'
@@ -46,6 +38,9 @@ function handleRadioGroupKeyDown<T extends string>(
 function App() {
   const [connections, setConnections] = useState<ConnectionInfo[]>([])
   const [selectedConnectionId, setSelectedConnectionId] = useState('')
+  const [selectedDatabase, setSelectedDatabase] = useState({ name: '', id: '' })
+  const connectionSelection = useRef(0)
+  const [connectionRevisions, setConnectionRevisions] = useState<Record<string, number>>({})
   const [tables, setTables] = useState<TableInfo[]>([])
   const [selectedTable, setSelectedTable] = useState<TableInfo | null>(null)
   const [tableData, setTableData] = useState<TableData | null>(null)
@@ -67,10 +62,11 @@ function App() {
   const connectionDialogOpener = useRef<HTMLElement | null>(null)
   const [connectionUrl, setConnectionUrl] = useState('')
   const [connectionName, setConnectionName] = useState('')
+  const [editingConnectionId, setEditingConnectionId] = useState('')
+  const [showAllDatabases, setShowAllDatabases] = useState(false)
   const [showUrl, setShowUrl] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [view, setView] = useState<View>('data')
-  const [tableSearch, setTableSearch] = useState('')
   const [rowSearch, setRowSearch] = useState('')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -121,7 +117,6 @@ function App() {
       return BASE_FONT_SIZE_PX
     }
   })
-  const [collapsedSchemas, setCollapsedSchemas] = useState<Record<string, boolean>>({})
 
   const activeConnection = connections.find((connection) => connection.id === selectedConnectionId) ?? null
   const sidebarMaxWidth = Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, window.innerWidth - 320))
@@ -129,22 +124,33 @@ function App() {
   const updateChannelValues: UpdateChannel[] = ['stable', 'nightly']
 
   useEffect(() => {
+    if (!showConnectionDialog) {
+      setConnectionUrl('')
+      setShowUrl(false)
+    }
+  }, [showConnectionDialog])
+
+  useEffect(() => {
     let cancelled = false
     const restoreSavedConnections = async () => {
+      const request = ++connectionSelection.current
       try {
         const saved = await PostgresService.ListSavedConnections()
-        if (cancelled) return
+        if (cancelled || request !== connectionSelection.current) return
         const items = saved ?? []
         setConnections(items)
         if (items.length === 0) return
 
         setOpeningConnectionId(items[0].id)
-        await PostgresService.OpenSavedConnection(items[0].id)
-        if (!cancelled) setSelectedConnectionId(items[0].id)
+        const info = await PostgresService.OpenSavedConnection(items[0].id)
+        if (!cancelled && request === connectionSelection.current) {
+          setSelectedConnectionId(info.id)
+          setSelectedDatabase({ name: info.database, id: info.id })
+        }
       } catch (error) {
-        if (!cancelled) setSavedConnectionsError(errorMessage(error, 'Could not open the saved connection.'))
+        if (!cancelled && request === connectionSelection.current) setSavedConnectionsError(errorMessage(error, 'Could not open the saved connection.'))
       } finally {
-        if (!cancelled) setOpeningConnectionId('')
+        if (!cancelled && request === connectionSelection.current) setOpeningConnectionId('')
       }
     }
     void restoreSavedConnections()
@@ -300,17 +306,11 @@ function App() {
     }
   }, [showConnectionDialog, showSettingsDialog])
 
-  const filteredTables = useMemo(() => {
-    const query = tableSearch.trim().toLowerCase()
-    if (!query) return tables
-    return tables.filter((table) => `${table.schema}.${table.name}`.toLowerCase().includes(query))
-  }, [tables, tableSearch])
-
   const pageStart = tableData?.rows.length ? pageOffset + 1 : 0
   const pageEnd = tableData ? Math.min(pageOffset + tableData.rows.length, tableData.rowCount) : 0
 
   useEffect(() => {
-    if (!selectedConnectionId) {
+    if (!selectedDatabase.id) {
       setTables([])
       setSelectedTable(null)
       setTableData(null)
@@ -321,7 +321,7 @@ function App() {
     setTablesLoading(true)
     setTables([])
     setTablesError('')
-    PostgresService.ListTables(selectedConnectionId)
+    PostgresService.ListTables(selectedDatabase.id)
       .then((result) => {
         if (!cancelled) setTables(result ?? [])
       })
@@ -333,10 +333,10 @@ function App() {
       })
 
     return () => { cancelled = true }
-  }, [selectedConnectionId, refreshKey])
+  }, [selectedDatabase.id, refreshKey])
 
   useEffect(() => {
-    if (!selectedConnectionId || !selectedTable) {
+    if (!selectedDatabase.id || !selectedTable) {
       setTableData(null)
       setTableLoading(false)
       return
@@ -346,7 +346,7 @@ function App() {
     setTableLoading(true)
     setTableData(null)
     setTableError('')
-    PostgresService.GetTableData(selectedConnectionId, selectedTable.schema, selectedTable.name, pageSize, pageOffset)
+    PostgresService.GetTableData(selectedDatabase.id, selectedTable.schema, selectedTable.name, pageSize, pageOffset)
       .then((result) => {
         if (!cancelled) {
           setTableData({
@@ -365,7 +365,7 @@ function App() {
       })
 
     return () => { cancelled = true }
-  }, [selectedConnectionId, selectedTable?.schema, selectedTable?.name, pageSize, pageOffset, refreshKey])
+  }, [selectedDatabase.id, selectedTable?.schema, selectedTable?.name, pageSize, pageOffset, refreshKey])
 
   const guardNavigation = (action: () => void) => {
     if (savingChanges) return
@@ -387,6 +387,21 @@ function App() {
       setConnectionError('')
       setConnectionUrl('')
       setConnectionName('')
+      setEditingConnectionId('')
+      setShowAllDatabases(false)
+      setShowUrl(false)
+      setShowConnectionDialog(true)
+    })
+  }
+
+  const editConnection = (connection: ConnectionInfo) => {
+    connectionDialogOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    guardNavigation(() => {
+      setConnectionError('')
+      setEditingConnectionId(connection.id)
+      setConnectionName(connection.name)
+      setShowAllDatabases(connection.showAllDatabases)
+      setConnectionUrl('')
       setShowUrl(false)
       setShowConnectionDialog(true)
     })
@@ -434,9 +449,14 @@ function App() {
     setConnecting(true)
     setConnectionError('')
     try {
-      const connection = await PostgresService.Connect(connectionUrl.trim(), connectionName.trim()) as ConnectionInfo
-      setConnections((current) => [connection, ...current])
+      const connection = editingConnectionId
+        ? await PostgresService.UpdateSavedConnection(editingConnectionId, connectionUrl.trim(), connectionName.trim(), showAllDatabases)
+        : await PostgresService.Connect(connectionUrl.trim(), connectionName.trim(), showAllDatabases)
+      connectionSelection.current++
+      setConnections((current) => editingConnectionId ? current.map((item) => item.id === connection.id ? connection : item) : [connection, ...current])
+      setConnectionRevisions((current) => ({ ...current, [connection.id]: (current[connection.id] ?? 0) + 1 }))
       setSelectedConnectionId(connection.id)
+      setSelectedDatabase({ name: connection.database, id: connection.id })
       setSelectedTable(null)
       setPageOffset(0)
       setRowSearch('')
@@ -445,6 +465,7 @@ function App() {
       setMobileNavOpen(false)
       setConnectionUrl('')
       setSavedConnectionsError('')
+      setRefreshKey((value) => value + 1)
     } catch (error) {
       setConnectionError(errorMessage(error, 'Could not connect. Check the URL and try again.'))
     } finally {
@@ -455,21 +476,54 @@ function App() {
   const selectConnection = (connectionId: string) => guardNavigation(() => { void openConnection(connectionId) })
 
   const openConnection = async (connectionId: string) => {
+    const request = ++connectionSelection.current
     setOpeningConnectionId(connectionId)
     setSavedConnectionsError('')
     try {
-      await PostgresService.OpenSavedConnection(connectionId)
+      const info = await PostgresService.OpenSavedConnection(connectionId)
+      if (request !== connectionSelection.current) return
       setSelectedConnectionId(connectionId)
+      setSelectedDatabase({ name: info.database, id: connectionId })
       setSelectedTable(null)
       setTableData(null)
       setPageOffset(0)
-      setCollapsedSchemas({})
+      setRowSearch('')
       setView('data')
       setMobileNavOpen(false)
     } catch (error) {
-      setSavedConnectionsError(errorMessage(error, 'Could not open this connection.'))
+      if (request === connectionSelection.current) setSavedConnectionsError(errorMessage(error, 'Could not open this connection.'))
     } finally {
-      setOpeningConnectionId('')
+      if (request === connectionSelection.current) setOpeningConnectionId('')
+    }
+  }
+
+  const selectDatabase = (connection: ConnectionInfo, database: string, table?: TableInfo) => guardNavigation(() => {
+    if (selectedConnectionId === connection.id && selectedDatabase.name === database) {
+      if (table) showTable(table)
+      return
+    }
+    void openDatabase(connection, database, table)
+  })
+
+  const openDatabase = async (connection: ConnectionInfo, database: string, table?: TableInfo) => {
+    const request = ++connectionSelection.current
+    setOpeningConnectionId(connection.id)
+    setSavedConnectionsError('')
+    try {
+      const handle = await PostgresService.OpenDatabase(connection.id, database)
+      if (request !== connectionSelection.current) return
+      setSelectedConnectionId(connection.id)
+      setSelectedDatabase({ name: database, id: handle })
+      setSelectedTable(table ?? null)
+      setTableData(null)
+      setPageOffset(0)
+      setRowSearch('')
+      setView('data')
+      setMobileNavOpen(false)
+    } catch (error) {
+      if (request === connectionSelection.current) setSavedConnectionsError(errorMessage(error, 'Could not open this database.'))
+    } finally {
+      if (request === connectionSelection.current) setOpeningConnectionId('')
     }
   }
 
@@ -482,37 +536,30 @@ function App() {
       setSavedConnectionsError(errorMessage(error, 'Could not remove this connection.'))
       return
     }
+    connectionSelection.current++
+    setOpeningConnectionId('')
+    setSavedConnectionsError('')
     const remaining = connections.filter((item) => item.id !== connection.id)
-    setConnections(remaining)
+    setConnections((current) => current.filter((item) => item.id !== connection.id))
     if (selectedConnectionId === connection.id) {
       setSelectedConnectionId('')
+      setSelectedDatabase({ name: '', id: '' })
       setSelectedTable(null)
       setPageOffset(0)
       setRowSearch('')
-      setCollapsedSchemas({})
       if (remaining[0]) void openConnection(remaining[0].id)
     }
   }
 
-  const selectTable = (table: TableInfo) => guardNavigation(() => {
+  const selectTable = (table: TableInfo) => guardNavigation(() => showTable(table))
+
+  const showTable = (table: TableInfo) => {
     setSelectedTable(table)
     setPageOffset(0)
     setRowSearch('')
-    setCollapsedSchemas((current) => current[table.schema] ? { ...current, [table.schema]: false } : current)
     setView('data')
     setMobileNavOpen(false)
-  })
-
-  const toggleSchema = (schema: string) => {
-    setCollapsedSchemas((current) => ({ ...current, [schema]: !current[schema] }))
   }
-
-  const groupedTables = useMemo(() => {
-    return filteredTables.reduce<Record<string, TableInfo[]>>((groups, table) => {
-      ;(groups[table.schema] ??= []).push(table)
-      return groups
-    }, {})
-  }, [filteredTables])
 
   return (
     <div className={`app-shell ${resizingSidebar ? 'is-resizing-sidebar' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
@@ -537,57 +584,13 @@ function App() {
             <span>Add a database</span>
           </button>
         ) : (
-          <div className="connection-list">
-            {connections.map((connection) => (
-              <div className={`connection-wrap ${selectedConnectionId === connection.id ? 'is-active' : ''}`} key={connection.id}>
-                <button className="connection-item" type="button" aria-label={`Select ${connection.name}`} aria-busy={openingConnectionId === connection.id} onClick={() => void selectConnection(connection.id)}>
-                  <span className="database-glyph" aria-hidden="true">{openingConnectionId === connection.id ? <span className="tiny-spinner" /> : <DatabaseIcon />}</span>
-                  <span className="connection-copy"><strong>{connection.name}</strong><small>{connection.host}</small></span>
-                </button>
-                <button className="connection-close" type="button" aria-label={`Remove ${connection.name}`} title="Remove connection" onClick={() => void removeConnection(connection)}>
-                  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" /></svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {activeConnection && (
-          <div className="tables-nav">
-            <div className="sidebar-section-heading table-heading">
-              <span>Tables</span>
-              <span className="table-count">{tablesLoading ? '…' : tables.length}</span>
-            </div>
-            <label className="sidebar-search">
-              <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="5.4" /><path d="m12 12 3.2 3.2" /></svg>
-              <input value={tableSearch} onChange={(event) => setTableSearch(event.target.value)} placeholder="Find a table" aria-label="Find a table" />
-            </label>
-            <div className="schema-list">
-              {tablesLoading ? <div className="sidebar-loading"><span className="tiny-spinner" />Loading tables</div> : null}
-              {!tablesLoading && tablesError ? <div className="sidebar-error">{tablesError}</div> : null}
-              {!tablesLoading && !tablesError && tables.length === 0 ? <div className="sidebar-empty-tables">No tables found</div> : null}
-              {!tablesLoading && Object.entries(groupedTables).map(([schema, schemaTables]) => (
-                <div className="schema-group" key={schema}>
-                  <button className="schema-label" type="button" aria-expanded={!collapsedSchemas[schema]} onClick={() => toggleSchema(schema)}>
-                    <svg className={`tree-chevron ${collapsedSchemas[schema] ? '' : 'is-open'}`} viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m5.5 3.5 5 4.5-5 4.5" /></svg>
-                    <svg className="schema-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m3 6 5-3 5 3v6l-5 3-5-3zM3 6l5 3 5-3M8 9v6" /></svg>{schema}
-                  </button>
-                  {!collapsedSchemas[schema] ? schemaTables.map((table) => {
-                    const tableKey = `${table.schema}.${table.name}`
-                    const isSelected = selectedTable?.schema === table.schema && selectedTable.name === table.name
-                    return <div className={`table-nav-entry ${isSelected ? 'is-current' : ''}`} key={tableKey}>
-                      <div className="table-nav-row">
-                        <button className="table-nav-item" type="button" aria-current={isSelected ? 'page' : undefined} aria-label={`Open ${table.name} table`} onClick={() => { if (!isSelected) selectTable(table) }}>
-                          <span className="table-grid-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none"><rect x="2.5" y="3" width="11" height="10" rx="1.5" /><path d="M2.5 6.5h11M6.2 6.5V13" /></svg></span>
-                          <span>{table.name}</span>
-                        </button>
-                      </div>
-                    </div>
-                  }) : null}
-                </div>
-              ))}
-            </div>
-          </div>
+          <ConnectionTree
+            connections={connections} selectedConnectionId={selectedConnectionId}
+            selectedDatabase={selectedDatabase.name} selectedTable={selectedTable}
+            openingConnectionId={openingConnectionId} refreshKey={refreshKey} revisions={connectionRevisions}
+            onSelectConnection={selectConnection} onSelectDatabase={selectDatabase}
+            onEdit={editConnection} onDelete={removeConnection}
+          />
         )}
 
         <div className="sidebar-bottom">
@@ -622,7 +625,7 @@ function App() {
             <button className="mobile-nav-button" type="button" onClick={() => setMobileNavOpen((open) => !open)} aria-label="Open navigation" aria-expanded={mobileNavOpen}>
               <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M3 5h12M3 9h12M3 13h12" /></svg>
             </button>
-            {selectedTable ? <><span className="crumb-muted">{activeConnection?.name}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-current">{selectedTable.name}</span></> : <span className="crumb-current">{activeConnection?.name ?? 'hyperpg'}</span>}
+            {activeConnection ? <><span className="crumb-muted">{activeConnection.name}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className={selectedTable ? 'crumb-muted' : 'crumb-current'}>{selectedDatabase.name}</span>{selectedTable ? <><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-current">{selectedTable.name}</span></> : null}</> : <span className="crumb-current">hyperpg</span>}
           </div>
           <div className="topbar-right">
             {activeConnection ? <span className="status-pill" title="Connected" aria-label="Connected"><span className="status-dot" /></span> : null}
@@ -634,8 +637,8 @@ function App() {
           <div className="content-area">
             <section className="database-header">
               <div>
-                <h1>{activeConnection.name}</h1>
-                <div className="database-meta">{activeConnection.host}<span className="meta-divider" />{tables.length} tables</div>
+                <h1>{selectedDatabase.name}</h1>
+                <div className="database-meta">{activeConnection.name}<span className="meta-divider" />{activeConnection.host}<span className="meta-divider" />{tables.length} tables</div>
               </div>
               <button className="quiet-action" type="button" aria-label="Refresh" title="Refresh" onClick={() => guardNavigation(() => setRefreshKey((value) => value + 1))}>
                 <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M14.8 5.1A6.5 6.5 0 1 0 15.5 9M14.8 5.1V1.8M14.8 5.1h-3.3" /></svg>
@@ -688,8 +691,8 @@ function App() {
                     </div>
                     {tableError ? <div className="notice notice-error">{tableError}</div> : null}
                     {tableLoading ? <div className="table-loading"><span className="spinner" />Loading rows…</div> : tableData ? <DataGrid
-                      key={`${selectedConnectionId}:${selectedTable.schema}:${selectedTable.name}:${pageOffset}:${pageSize}:${refreshKey}`}
-                      ref={gridRef} data={tableData} connectionID={selectedConnectionId} schema={selectedTable.schema} table={selectedTable.name}
+                      key={`${selectedDatabase.id}:${selectedTable.schema}:${selectedTable.name}:${pageOffset}:${pageSize}:${refreshKey}`}
+                      ref={gridRef} data={tableData} connectionID={selectedDatabase.id} schema={selectedTable.schema} table={selectedTable.name}
                       pageOffset={pageOffset} search={rowSearch} onDirtyChange={setHasPendingChanges} onSavingChange={setSavingChanges}
                       onSaved={(rowCountDelta) => {
                         const remainingCount = Math.max(0, tableData.rowCount + rowCountDelta)
@@ -714,7 +717,7 @@ function App() {
                 </div>
               )}
             </section>
-            <footer className="main-footer"><span><span className="footer-led" />Connected to {activeConnection.database}</span><span>Changes apply when saved</span></footer>
+            <footer className="main-footer"><span><span className="footer-led" />Connected to {selectedDatabase.name}</span><span>Changes apply when saved</span></footer>
           </div>
         ) : (
           <div className="welcome-area">
@@ -770,15 +773,20 @@ function App() {
         <section className="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
           <button className="dialog-close" type="button" aria-label="Close" onClick={() => setShowConnectionDialog(false)} disabled={connecting}><svg viewBox="0 0 18 18" fill="none"><path d="m4 4 10 10M14 4 4 14" /></svg></button>
           <div className="dialog-icon"><DatabaseIcon /></div>
-          <div className="dialog-heading"><h2 id="dialog-title">New connection</h2><p>Paste a PostgreSQL connection URL to get started.</p></div>
+          <div className="dialog-heading"><h2 id="dialog-title">{editingConnectionId ? 'Edit connection' : 'New connection'}</h2><p>{editingConnectionId ? 'Update the connection name, URL, and database visibility.' : 'Paste a PostgreSQL connection URL to get started.'}</p></div>
           <form onSubmit={handleConnect}>
             <label className="field-label" htmlFor="connection-name">Connection name <span>Optional</span></label>
-            <input id="connection-name" className="dialog-input" value={connectionName} onChange={(event) => setConnectionName(event.target.value)} placeholder="e.g. Production" autoComplete="off" />
+            <input id="connection-name" className="dialog-input" value={connectionName} onChange={(event) => setConnectionName(event.target.value)} placeholder="e.g. Production" autoComplete="off" disabled={connecting} />
             <label className="field-label connection-url-label" htmlFor="connection-url">Database URL</label>
-            <div className="url-input-wrap"><input id="connection-url" className="dialog-input url-input" value={connectionUrl} onChange={(event) => setConnectionUrl(event.target.value)} placeholder="postgresql://user:password@host:5432/dbname" type={showUrl ? 'text' : 'password'} autoComplete="off" autoFocus required /><button className="reveal-url" type="button" onClick={() => setShowUrl((visible) => !visible)} aria-label={showUrl ? 'Hide URL' : 'Show URL'}>{showUrl ? <svg viewBox="0 0 20 20" fill="none"><path d="M3 3 17 17M8.6 8.7a2 2 0 0 0 2.7 2.7M7.1 5.3A9.8 9.8 0 0 1 10 4.8c4.6 0 7.5 4.1 8 5.2-.2.5-1 1.8-2.4 2.9M5.2 6.7C3.5 7.8 2.4 9.5 2 10c.5 1.1 3.4 5.2 8 5.2 1 0 1.9-.2 2.7-.6" /></svg> : <svg viewBox="0 0 20 20" fill="none"><path d="M2 10s2.8-5.2 8-5.2 8 5.2 8 5.2-2.8 5.2-8 5.2S2 10 2 10Z" /><circle cx="10" cy="10" r="2.2" /></svg>}</button></div>
+            <div className="url-input-wrap"><input id="connection-url" className="dialog-input url-input" value={connectionUrl} onChange={(event) => setConnectionUrl(event.target.value)} placeholder={editingConnectionId ? 'Leave blank to keep the saved URL' : 'postgresql://user:password@host:5432/dbname'} type={showUrl ? 'text' : 'password'} autoComplete="off" autoFocus required={!editingConnectionId} disabled={connecting} aria-describedby={editingConnectionId ? 'connection-url-hint' : undefined} /><button className="reveal-url" type="button" onClick={() => setShowUrl((visible) => !visible)} aria-label={showUrl ? 'Hide URL' : 'Show URL'}>{showUrl ? <svg viewBox="0 0 20 20" fill="none"><path d="M3 3 17 17M8.6 8.7a2 2 0 0 0 2.7 2.7M7.1 5.3A9.8 9.8 0 0 1 10 4.8c4.6 0 7.5 4.1 8 5.2-.2.5-1 1.8-2.4 2.9M5.2 6.7C3.5 7.8 2.4 9.5 2 10c.5 1.1 3.4 5.2 8 5.2 1 0 1.9-.2 2.7-.6" /></svg> : <svg viewBox="0 0 20 20" fill="none"><path d="M2 10s2.8-5.2 8-5.2 8 5.2 8 5.2-2.8 5.2-8 5.2S2 10 2 10Z" /><circle cx="10" cy="10" r="2.2" /></svg>}</button></div>
+            {editingConnectionId ? <p className="field-hint" id="connection-url-hint">Enter a new URL to replace the saved one, or leave it blank to keep it.</p> : null}
+            <label className="connection-option" htmlFor="show-all-databases">
+              <input id="show-all-databases" type="checkbox" checked={showAllDatabases} onChange={(event) => setShowAllDatabases(event.target.checked)} disabled={connecting} aria-labelledby="show-all-databases-label" aria-describedby="show-all-databases-hint" />
+              <span><strong id="show-all-databases-label">Show all databases</strong><small id="show-all-databases-hint">Browse all accessible databases on this server. Turn off to show only the database in the URL.</small></span>
+            </label>
             {connectionError ? <div className="form-error" role="alert"><svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="6.7" /><path d="M9 5.5v4M9 12.1v.1" /></svg>{connectionError}</div> : null}
             <div className="dialog-note"><svg viewBox="0 0 18 18" fill="none"><path d="M9 2.2 3.2 4.5v4.1c0 3.3 2.5 5.9 5.8 7.2 3.3-1.3 5.8-3.9 5.8-7.2V4.5L9 2.2Z" /><path d="m6.4 8.8 1.7 1.7 3.6-3.7" /></svg><span>Saved securely on this device.</span></div>
-            <div className="dialog-actions"><button className="cancel-button" type="button" onClick={() => setShowConnectionDialog(false)} disabled={connecting}>Cancel</button><button className="connect-button" type="submit" disabled={connecting || !connectionUrl.trim()}>{connecting ? <><span className="button-spinner" />Connecting</> : 'Connect database'}</button></div>
+            <div className="dialog-actions"><button className="cancel-button" type="button" onClick={() => setShowConnectionDialog(false)} disabled={connecting}>Cancel</button><button className="connect-button" type="submit" disabled={connecting || !editingConnectionId && !connectionUrl.trim()}>{connecting ? <><span className="button-spinner" />{editingConnectionId ? 'Saving' : 'Connecting'}</> : editingConnectionId ? 'Save connection' : 'Connect database'}</button></div>
           </form>
         </section>
       </div> : null}
