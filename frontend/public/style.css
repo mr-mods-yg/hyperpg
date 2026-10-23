@@ -1856,11 +1856,9 @@ textarea:focus-visible,
 }
 
 
-:root[data-font-size="small"] { --font-scale: .9; }
-:root[data-font-size="large"] { --font-scale: 1.15; }
-
 .font-size-section { margin-top: 20px; }
-.font-size-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.font-size-options .theme-option { min-height: 62px; justify-content: center; padding: 10px 26px 10px 11px; }
-.font-size-options .theme-option-copy { gap: 4px; }
-.font-size-options .theme-radio { top: 50%; right: 10px; bottom: auto; transform: translateY(-50%); }
+.font-size-control-row { display: flex; align-items: center; gap: 14px; }
+.font-size-control { width: 100%; min-width: 0; height: 22px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.font-size-value { min-width: 58px; padding: 6px 8px; color: var(--ink); background: var(--surface-raised); border: 1px solid var(--line); border-radius: 7px; font-size: calc(12px * var(--font-scale, 1)); font-weight: 600; font-variant-numeric: tabular-nums; text-align: center; }
+.font-size-range-labels { display: flex; justify-content: space-between; margin-top: 1px; color: var(--muted); font-size: calc(10px * var(--font-scale, 1)); font-variant-numeric: tabular-nums; }
+.font-size-help { margin: 8px 0 0; color: var(--muted); font-size: calc(11px * var(--font-scale, 1)); line-height: 1.45; }

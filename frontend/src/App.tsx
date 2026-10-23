@@ -14,13 +14,15 @@ type ConnectionInfo = {
 type TableInfo = { schema: string; name: string }
 type View = 'data' | 'structure'
 type Theme = 'light' | 'dark' | 'cream' | 'discord'
-type FontSize = 'small' | 'medium' | 'large'
 type UpdateChannel = 'stable' | 'nightly'
 type UpdateInfo = { available: boolean; version: string; releaseUrl: string; installError?: string }
 
 const SIDEBAR_MIN_WIDTH = 190
 const SIDEBAR_MAX_WIDTH = 420
 const DEFAULT_SIDEBAR_WIDTH = 246
+const BASE_FONT_SIZE_PX = 12
+const MIN_FONT_SIZE_PX = 10
+const MAX_FONT_SIZE_PX = 18
 
 function handleRadioGroupKeyDown<T extends string>(
   event: ReactKeyboardEvent<HTMLButtonElement>,
@@ -106,12 +108,17 @@ function App() {
       return 'light'
     }
   })
-  const [fontSize, setFontSize] = useState<FontSize>(() => {
+  const [fontSizePx, setFontSizePx] = useState(() => {
     try {
-      const savedFontSize = localStorage.getItem('hyperpg-font-size')
-      return savedFontSize === 'small' || savedFontSize === 'large' ? savedFontSize : 'medium'
+      const savedFontSizePx = Number(localStorage.getItem('hyperpg-font-size-px'))
+      if (Number.isInteger(savedFontSizePx) && savedFontSizePx >= MIN_FONT_SIZE_PX && savedFontSizePx <= MAX_FONT_SIZE_PX) return savedFontSizePx
+
+      const previousFontSize = localStorage.getItem('hyperpg-font-size')
+      if (previousFontSize === 'small') return 11
+      if (previousFontSize === 'large') return 14
+      return BASE_FONT_SIZE_PX
     } catch {
-      return 'medium'
+      return BASE_FONT_SIZE_PX
     }
   })
   const [collapsedSchemas, setCollapsedSchemas] = useState<Record<string, boolean>>({})
@@ -119,7 +126,6 @@ function App() {
   const activeConnection = connections.find((connection) => connection.id === selectedConnectionId) ?? null
   const sidebarMaxWidth = Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, window.innerWidth - 320))
   const themeValues: Theme[] = ['light', 'cream', 'dark', 'discord']
-  const fontSizeValues: FontSize[] = ['small', 'medium', 'large']
   const updateChannelValues: UpdateChannel[] = ['stable', 'nightly']
 
   useEffect(() => {
@@ -155,13 +161,14 @@ function App() {
   }, [theme])
 
   useEffect(() => {
-    document.documentElement.dataset.fontSize = fontSize
+    document.documentElement.style.setProperty('--font-scale', String(fontSizePx / BASE_FONT_SIZE_PX))
     try {
-      localStorage.setItem('hyperpg-font-size', fontSize)
+      localStorage.setItem('hyperpg-font-size-px', String(fontSizePx))
+      localStorage.removeItem('hyperpg-font-size')
     } catch {
       // Font size remains active for this session if local storage is unavailable.
     }
-  }, [fontSize])
+  }, [fontSizePx])
 
   useEffect(() => {
     try {
@@ -807,17 +814,13 @@ function App() {
             </div>
           </div>
           <div className="settings-section font-size-section">
-            <span className="field-label">Font size</span>
-            <div className="theme-options font-size-options" role="radiogroup" aria-label="Font size">
-              {fontSizeValues.map((value) => {
-                const label = value === 'medium' ? 'Default' : value === 'small' ? 'Small' : 'Large'
-                const description = value === 'medium' ? 'Standard text' : value === 'small' ? 'Compact text' : 'Larger text'
-                return <button key={value} className={`theme-option ${fontSize === value ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={fontSize === value} tabIndex={fontSize === value ? 0 : -1} onKeyDown={(event) => handleRadioGroupKeyDown(event, fontSizeValues, fontSize, setFontSize)} onClick={() => setFontSize(value)}>
-                  <span className="theme-option-copy"><strong>{label}</strong><small>{description}</small></span>
-                  <span className="theme-radio" />
-                </button>
-              })}
+            <label className="field-label" htmlFor="font-size-control">Font size</label>
+            <div className="font-size-control-row">
+              <input id="font-size-control" className="font-size-control" type="range" min={MIN_FONT_SIZE_PX} max={MAX_FONT_SIZE_PX} step="1" value={fontSizePx} onChange={(event) => setFontSizePx(Number(event.currentTarget.value))} aria-valuetext={`${fontSizePx} pixels`} />
+              <output className="font-size-value" htmlFor="font-size-control">{fontSizePx} px</output>
             </div>
+            <div className="font-size-range-labels" aria-hidden="true"><span>{MIN_FONT_SIZE_PX} px</span><span>{MAX_FONT_SIZE_PX} px</span></div>
+            <p className="font-size-help">Sets the base text size; other interface text scales proportionally.</p>
           </div>
           <div className="settings-section update-settings-section">
             <span className="field-label">Update channel</span>
