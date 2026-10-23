@@ -86,11 +86,43 @@ jobs:
         run: |
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           if [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF_TYPE" == "tag" ]]; then
+            if [[ ! "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+              echo "Stable release tags must use vMAJOR.MINOR.PATCH without a prerelease suffix." >&2
+              exit 1
+            fi
             echo "channel=stable" >> "$GITHUB_OUTPUT"
-            echo "version=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           else
             echo "channel=nightly" >> "$GITHUB_OUTPUT"
-            echo "version=nightly-$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+            version="$(python3 - <<'PY'
+          import re
+          import subprocess
+
+          stable_tag = re.compile(r"^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+          stable_versions = []
+          for tag in subprocess.check_output(["git", "tag", "--list"], text=True).splitlines():
+              match = stable_tag.fullmatch(tag)
+              if match:
+                  stable_versions.append(tuple(map(int, match.groups())))
+
+          if not stable_versions:
+              raise SystemExit("No stable SemVer tags were found.")
+
+          major, minor, patch = max(stable_versions)
+          patch += 1
+          base = f"{major}.{minor}.{patch}"
+          nightly_tag = re.compile(rf"^v{re.escape(base)}-nightly\.(0|[1-9][0-9]*)$")
+          sequences = []
+          for tag in subprocess.check_output(["git", "tag", "--list"], text=True).splitlines():
+              match = nightly_tag.fullmatch(tag)
+              if match:
+                  sequences.append(int(match.group(1)))
+
+          print(f"{base}-nightly.{max(sequences, default=0) + 1}")
+          PY
+          )"
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+            echo "Nightly version: $version"
           fi
 
   build:
@@ -179,7 +211,7 @@ jobs:
         env:
           APP_VERSION: ${{ needs.source.outputs.version }}
         run: |
-          if ($env:APP_VERSION -match '^v?(\d+)\.(\d+)\.(\d+)$') {
+          if ($env:APP_VERSION -match '^v?(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') {
             $installerVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3])"
           } else {
             $installerVersion = "0.0.$env:GITHUB_RUN_NUMBER"
@@ -270,10 +302,12 @@ jobs:
           SOURCE_SHA: ${{ needs.source.outputs.sha }}
         run: |
           short_sha="${SOURCE_SHA:0:7}"
-          title="Nightly $(date -u +'%Y-%m-%d') ($short_sha)"
-          tag="nightly-${GITHUB_RUN_NUMBER}-${short_sha}-attempt-${GITHUB_RUN_ATTEMPT}"
+          title="${{ needs.source.outputs.version }} ($(date -u +'%Y-%m-%d'), $short_sha)"
+          tag="v${{ needs.source.outputs.version }}"
           {
-            echo "Automated prerelease built from the \`nightly\` branch."
+            echo "Automated SemVer prerelease built from the \`nightly\` branch."
+            echo
+            echo "Version: \`${{ needs.source.outputs.version }}\`"
             echo
             echo "Commit: \`$SOURCE_SHA\`"
             echo "Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

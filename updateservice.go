@@ -198,22 +198,36 @@ func (s *UpdateService) latestRelease(channel string) (githubRelease, error) {
 	if err := json.Unmarshal(body, &releases); err != nil {
 		return githubRelease{}, fmt.Errorf("GitHub returned invalid release information")
 	}
-	var latest githubRelease
+	var latestNightly githubRelease
+	var latestNightlyVersion semanticVersion
+	var latestLegacyNightly githubRelease
 	var latestRun uint64
+	hasSemverNightly := false
 	for _, release := range releases {
-		if release.Draft || !release.Prerelease || !strings.HasPrefix(release.TagName, "nightly-") {
+		if release.Draft || !release.Prerelease {
+			continue
+		}
+		if version, ok := parseNightlyVersion(release.TagName); ok {
+			if !hasSemverNightly || compareSemanticVersions(version, latestNightlyVersion) > 0 {
+				latestNightly = release
+				latestNightlyVersion = version
+				hasSemverNightly = true
+			}
 			continue
 		}
 		run, ok := nightlyRunNumber(release.TagName)
 		if ok && run > latestRun {
-			latest = release
+			latestLegacyNightly = release
 			latestRun = run
 		}
 	}
-	if latestRun == 0 {
-		return githubRelease{}, errNoPublishedRelease
+	if hasSemverNightly {
+		return latestNightly, nil
 	}
-	return latest, nil
+	if latestRun > 0 {
+		return latestLegacyNightly, nil
+	}
+	return githubRelease{}, errNoPublishedRelease
 }
 
 func (s *UpdateService) downloadAsset(asset githubAsset) (string, error) {
@@ -372,50 +386,178 @@ func findAsset(release githubRelease, name string) (githubAsset, bool) {
 
 func releaseIsNewer(channel, releaseTag, current string) (bool, string) {
 	if channel == "nightly" {
+		if releaseVersion, ok := parseNightlyVersion(releaseTag); ok {
+			currentVersion, currentOK := parseSemanticVersion(current)
+			return !currentOK || compareSemanticVersions(releaseVersion, currentVersion) > 0, releaseVersion.String()
+		}
 		run, ok := nightlyRunNumber(releaseTag)
 		if !ok {
+			return false, ""
+		}
+		if currentVersion, currentOK := parseSemanticVersion(current); currentOK && len(currentVersion.prerelease) > 0 {
 			return false, ""
 		}
 		currentRun, currentOK := nightlyRunNumber(current)
 		return !currentOK || run > currentRun, fmt.Sprintf("Nightly %d", run)
 	}
-	version := strings.TrimPrefix(releaseTag, "v")
 	if !strings.HasPrefix(releaseTag, "v") {
 		return false, ""
 	}
-	if strings.HasPrefix(current, "nightly-") || current == "dev" {
-		return true, version
+	version, versionErr := parseSemanticVersion(releaseTag)
+	if versionErr != nil || len(version.prerelease) > 0 {
+		return false, ""
 	}
-	currentParts, currentErr := stableVersionParts(current)
-	latestParts, latestErr := stableVersionParts(version)
-	if currentErr != nil || latestErr != nil {
-		return current == "dev", version
+	currentVersion, currentErr := parseSemanticVersion(current)
+	if currentErr != nil {
+		return true, version.String()
 	}
-	for index := range currentParts {
-		if latestParts[index] != currentParts[index] {
-			return latestParts[index] > currentParts[index], version
-		}
-	}
-	return false, version
+	return compareSemanticVersions(version, currentVersion) > 0, version.String()
 }
 
-func stableVersionParts(value string) ([3]uint64, error) {
-	var parts [3]uint64
-	value = strings.TrimPrefix(value, "v")
-	value = strings.SplitN(value, "+", 2)[0]
-	value = strings.SplitN(value, "-", 2)[0]
-	segments := strings.Split(value, ".")
-	if len(segments) != 3 {
-		return parts, fmt.Errorf("invalid semantic version")
+type semanticVersion struct {
+	major      uint64
+	minor      uint64
+	patch      uint64
+	prerelease []string
+}
+
+func (v semanticVersion) String() string {
+	version := fmt.Sprintf("%d.%d.%d", v.major, v.minor, v.patch)
+	if len(v.prerelease) > 0 {
+		version += "-" + strings.Join(v.prerelease, ".")
 	}
+	return version
+}
+
+func parseSemanticVersion(value string) (semanticVersion, error) {
+	var version semanticVersion
+	value = strings.TrimPrefix(value, "v")
+	if strings.Contains(value, "+") {
+		metadata := strings.SplitN(value, "+", 2)
+		value = metadata[0]
+		if !validSemverIdentifiers(metadata[1], false) {
+			return version, fmt.Errorf("invalid semantic version")
+		}
+	}
+	core := value
+	if separator := strings.IndexByte(value, '-'); separator >= 0 {
+		core = value[:separator]
+		prerelease := value[separator+1:]
+		if !validSemverIdentifiers(prerelease, true) {
+			return version, fmt.Errorf("invalid semantic version")
+		}
+		version.prerelease = strings.Split(prerelease, ".")
+	}
+	segments := strings.Split(core, ".")
+	if len(segments) != 3 {
+		return semanticVersion{}, fmt.Errorf("invalid semantic version")
+	}
+	values := []*uint64{&version.major, &version.minor, &version.patch}
 	for index, segment := range segments {
+		if len(segment) > 1 && segment[0] == '0' {
+			return semanticVersion{}, fmt.Errorf("invalid semantic version")
+		}
 		number, err := strconv.ParseUint(segment, 10, 64)
 		if err != nil {
-			return parts, fmt.Errorf("invalid semantic version")
+			return semanticVersion{}, fmt.Errorf("invalid semantic version")
 		}
-		parts[index] = number
+		*values[index] = number
 	}
-	return parts, nil
+	return version, nil
+}
+
+func validSemverIdentifiers(value string, rejectLeadingZero bool) bool {
+	if value == "" {
+		return false
+	}
+	for _, identifier := range strings.Split(value, ".") {
+		if identifier == "" {
+			return false
+		}
+		numeric := true
+		for index := 0; index < len(identifier); index++ {
+			character := identifier[index]
+			if character >= '0' && character <= '9' {
+				continue
+			}
+			numeric = false
+			if !((character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z') || character == '-') {
+				return false
+			}
+		}
+		if rejectLeadingZero && numeric && len(identifier) > 1 && identifier[0] == '0' {
+			return false
+		}
+	}
+	return true
+}
+
+func compareSemanticVersions(left, right semanticVersion) int {
+	for _, pair := range [][2]uint64{{left.major, right.major}, {left.minor, right.minor}, {left.patch, right.patch}} {
+		if pair[0] > pair[1] {
+			return 1
+		}
+		if pair[0] < pair[1] {
+			return -1
+		}
+	}
+	if len(left.prerelease) == 0 && len(right.prerelease) == 0 {
+		return 0
+	}
+	if len(left.prerelease) == 0 {
+		return 1
+	}
+	if len(right.prerelease) == 0 {
+		return -1
+	}
+	for index := 0; index < len(left.prerelease) && index < len(right.prerelease); index++ {
+		leftID, rightID := left.prerelease[index], right.prerelease[index]
+		leftNumeric, rightNumeric := isNumericIdentifier(leftID), isNumericIdentifier(rightID)
+		switch {
+		case leftNumeric && rightNumeric:
+			if len(leftID) > len(rightID) {
+				return 1
+			}
+			if len(leftID) < len(rightID) {
+				return -1
+			}
+		case leftNumeric && !rightNumeric:
+			return -1
+		case !leftNumeric && rightNumeric:
+			return 1
+		default:
+			if leftID > rightID {
+				return 1
+			}
+			if leftID < rightID {
+				return -1
+			}
+		}
+	}
+	if len(left.prerelease) > len(right.prerelease) {
+		return 1
+	}
+	if len(left.prerelease) < len(right.prerelease) {
+		return -1
+	}
+	return 0
+}
+
+func isNumericIdentifier(value string) bool {
+	for index := 0; index < len(value); index++ {
+		if value[index] < '0' || value[index] > '9' {
+			return false
+		}
+	}
+	return value != ""
+}
+
+func parseNightlyVersion(tag string) (semanticVersion, bool) {
+	version, err := parseSemanticVersion(tag)
+	if err != nil || len(version.prerelease) != 2 || version.prerelease[0] != "nightly" || !isNumericIdentifier(version.prerelease[1]) {
+		return semanticVersion{}, false
+	}
+	return version, true
 }
 
 func nightlyRunNumber(tag string) (uint64, bool) {
