@@ -323,7 +323,7 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
         {!visibleRows.length ? <div className="empty-table">{search ? 'No rows match your search.' : 'This table has no rows yet. Use Add row to create one.'}</div> : null}
       </div>
     </div>
-    {message ? <div className="grid-feedback" role="status" aria-live="polite">{message}</div> : null}
+    <div className="grid-feedback" role="status" aria-live="polite">{message}</div>
     {menu ? <div className="grid-context-menu" role="menu" aria-label="Cell actions" ref={menuRef} style={{ left: menu.x, top: menu.y }} onKeyDown={(event) => {
       if (event.key === 'Escape') { event.preventDefault(); setMenu(null); if (active) focusCell(active) }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
