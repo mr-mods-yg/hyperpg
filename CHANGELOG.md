@@ -23,6 +23,7 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ### Fixed
 
+- Correctly detect newer nightly releases whose sequence number has the same number of digits.
 - Restore sidebar resizing by preventing a fixed width from overriding the dragged width.
 - Simplify sidebar table navigation to name labels without column dropdowns.
 - Expand the focus border around the full cell selection, including separate ranges, without outlines around interior cells.

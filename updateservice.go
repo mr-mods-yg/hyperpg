@@ -521,6 +521,12 @@ func compareSemanticVersions(left, right semanticVersion) int {
 			if len(leftID) < len(rightID) {
 				return -1
 			}
+			if leftID > rightID {
+				return 1
+			}
+			if leftID < rightID {
+				return -1
+			}
 		case leftNumeric && !rightNumeric:
 			return -1
 		case !leftNumeric && rightNumeric:
