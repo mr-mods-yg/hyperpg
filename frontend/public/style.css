@@ -1755,7 +1755,7 @@ textarea:focus-visible,
 
 .connection-dialog { width: min(100%, 470px); padding: 28px 28px 23px; border-radius: 14px; }
 .connection-dialog { max-height: min(88vh, 760px); max-height: min(88dvh, 760px); overflow-y: auto; overscroll-behavior: contain; }
-.settings-dialog { width: min(100%, 520px); }
+.settings-dialog { width: min(100%, 460px); }
 .dialog-icon { display: grid; }
 .dialog-heading { margin-bottom: 20px; }
 .dialog-heading h2 { font-size: calc(20px * var(--font-scale, 1)); font-weight: 650; letter-spacing: -.035em; }
