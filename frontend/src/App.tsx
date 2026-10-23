@@ -698,7 +698,42 @@ function App() {
                     </div> : null}
                   </> : <>
                     <div className="structure-intro"><h3>Columns</h3><span>{tableData?.columns.length ?? 0} total</span></div>
-                    {tableLoading ? <div className="table-loading"><span className="spinner" />Loading structure…</div> : tableData ? <div className="structure-table-wrap"><table className="structure-table"><thead><tr><th>Column</th><th>Type</th><th>Nullable</th></tr></thead><tbody>{tableData.columns.map((column, index) => <tr key={column.name}><td><span className="column-order">{String(index + 1).padStart(2, '0')}</span><strong>{column.name}</strong></td><td><code>{column.dataType}</code></td><td><span className="nullable-value">{column.nullable ? 'Yes' : 'No'}</span></td></tr>)}</tbody></table></div> : null}
+                    {tableLoading ? (
+                      <div className="table-loading"><span className="spinner" />Loading structure…</div>
+                    ) : tableData ? (
+                      <div className="structure-table-wrap">
+                        <table className="structure-table" aria-label="Column structure">
+                          <thead><tr>
+                            <th scope="col">Column</th><th scope="col">Type</th><th scope="col">Nullable</th>
+                            <th scope="col">Default</th><th scope="col">Generated</th><th scope="col">Auto increment</th>
+                          </tr></thead>
+                          <tbody>{tableData.columns.map((column, index) => (
+                            <tr key={column.name}>
+                              <td><span className="column-order">{String(index + 1).padStart(2, '0')}</span><strong>{column.name}</strong></td>
+                              <td><code>{column.dataType}</code></td>
+                              <td><span className="structure-value">{column.nullable ? 'Yes' : 'No'}</span></td>
+                              <td>
+                                {column.defaultValue ? <code className="structure-expression" title={column.defaultValue}>{column.defaultValue}</code>
+                                  : column.identityGeneration ? <span className="structure-value">Identity</span>
+                                    : <span className="structure-empty">—</span>}
+                              </td>
+                              <td>
+                                {column.generated && !column.identityGeneration
+                                  ? column.generationExpression
+                                    ? <code className="structure-expression" title={column.generationExpression}>{column.generationExpression}</code>
+                                    : <span className="structure-value">Always</span>
+                                  : <span className="structure-empty">—</span>}
+                              </td>
+                              <td>
+                                {column.identityGeneration ? <span className="structure-value">Identity · {column.identityGeneration.toLowerCase()}</span>
+                                  : column.autoIncrement ? <span className="structure-value">Sequence</span>
+                                    : <span className="structure-empty">—</span>}
+                              </td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      </div>
+                    ) : null}
                   </>}
                 </div>
               )}

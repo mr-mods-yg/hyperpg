@@ -1,4 +1,7 @@
-export type ColumnInfo = { name: string; dataType: string; nullable: boolean; hasDefault: boolean; generated: boolean; autoIncrement: boolean }
+export type ColumnInfo = {
+  name: string; dataType: string; nullable: boolean; hasDefault: boolean; generated: boolean; autoIncrement: boolean
+  defaultValue?: string; generationExpression?: string; identityGeneration?: string
+}
 export type RowIdentity = { tableOID: string; ctid: string; version: string }
 export type TableData = { columns: ColumnInfo[]; rows: unknown[][]; rowCount: number; identities: RowIdentity[] }
 export type CellPosition = { row: number; column: number }
