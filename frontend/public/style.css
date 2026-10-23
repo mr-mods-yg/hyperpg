@@ -1894,3 +1894,50 @@ textarea:focus-visible,
 .field-hint { color: var(--muted); font-size: calc(11px * var(--font-scale, 1)); line-height: 1.5; }
 .field-hint { margin: 7px 0 0; }
 .connection-dialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
+
+/* Let the data workspace follow the main pane and make Settings more compact vertically. */
+.database-header,
+.workspace-section { width: 90%; max-width: none; }
+.settings-dialog { width: min(100%, 620px); }
+.theme-options:not(.update-channel-options) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.theme-options:not(.update-channel-options) .theme-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  grid-template-rows: auto 1fr;
+  gap: 8px 4px;
+  padding: 8px;
+}
+.theme-options:not(.update-channel-options) .theme-preview { grid-column: 1 / -1; height: 54px; }
+.theme-options:not(.update-channel-options) .theme-option-copy { grid-column: 1; grid-row: 2; text-wrap: balance; }
+.theme-options:not(.update-channel-options) .theme-radio {
+  position: static;
+  grid-column: 2;
+  grid-row: 2;
+  width: 14px;
+  height: 14px;
+  justify-self: end;
+  align-self: center;
+}
+.dialog-heading { margin-bottom: 16px; }
+.font-size-section,
+.update-settings-section { margin-top: 16px; }
+.settings-note { margin-top: 12px; }
+.workspace-tabs { justify-content: space-between; padding-inline: 20px; }
+.workspace-tabs:not(:empty) .view-switcher { margin-left: 0; }
+.workspace-tabs .workspace-refresh { margin-top: 0; }
+.table-workspace { padding-top: 14px; }
+
+@media (max-width: 760px) {
+  .database-header,
+  .workspace-section { width: calc(100% - 32px); }
+  .theme-options:not(.update-channel-options) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-tabs { padding-inline: 13px; }
+  .table-workspace { padding-top: 12px; }
+}
+
+@media (max-width: 560px) {
+  .database-header,
+  .workspace-section { width: calc(100% - 20px); }
+  .workspace-tabs { padding-inline: 8px; }
+  .theme-preview { height: 48px; }
+}

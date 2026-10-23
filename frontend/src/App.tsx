@@ -625,7 +625,7 @@ function App() {
             <button className="mobile-nav-button" type="button" onClick={() => setMobileNavOpen((open) => !open)} aria-label="Open navigation" aria-expanded={mobileNavOpen}>
               <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M3 5h12M3 9h12M3 13h12" /></svg>
             </button>
-            {activeConnection ? <><span className="crumb-muted">{activeConnection.name}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className={selectedTable ? 'crumb-muted' : 'crumb-current'}>{selectedDatabase.name}</span>{selectedTable ? <><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-current">{selectedTable.name}</span></> : null}</> : <span className="crumb-current">hyperpg</span>}
+            {activeConnection ? <><span className="crumb-muted">{activeConnection.name}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className={selectedTable ? 'crumb-muted' : 'crumb-current'}>{selectedDatabase.name}</span>{selectedTable ? <><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-muted">{selectedTable.schema}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-current">{selectedTable.name}</span></> : null}</> : <span className="crumb-current">hyperpg</span>}
           </div>
           <div className="topbar-right">
             {activeConnection ? <span className="status-pill" title="Connected" aria-label="Connected"><span className="status-dot" /></span> : null}
@@ -635,7 +635,7 @@ function App() {
 
         {activeConnection ? (
           <div className="content-area">
-            <section className="database-header">
+            {!selectedTable ? <section className="database-header">
               <div>
                 <h1>{selectedDatabase.name}</h1>
                 <div className="database-meta">{activeConnection.name}<span className="meta-divider" />{activeConnection.host}<span className="meta-divider" />{tables.length} tables</div>
@@ -643,7 +643,7 @@ function App() {
               <button className="quiet-action" type="button" aria-label="Refresh" title="Refresh" onClick={() => guardNavigation(() => setRefreshKey((value) => value + 1))}>
                 <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M14.8 5.1A6.5 6.5 0 1 0 15.5 9M14.8 5.1V1.8M14.8 5.1h-3.3" /></svg>
               </button>
-            </section>
+            </section> : null}
 
             {savedConnectionsError ? <div className="notice notice-error compact-notice" role="alert">{savedConnectionsError}</div> : null}
 
@@ -653,6 +653,9 @@ function App() {
                   <button id="table-view-data-tab" type="button" role="tab" aria-controls="table-view-panel" aria-selected={view === 'data'} tabIndex={view === 'data' ? 0 : -1} className={view === 'data' ? 'is-selected' : ''} onClick={() => setView('data')}>Data</button>
                   <button id="table-view-structure-tab" type="button" role="tab" aria-controls="table-view-panel" aria-selected={view === 'structure'} tabIndex={view === 'structure' ? 0 : -1} className={view === 'structure' ? 'is-selected' : ''} onClick={() => guardNavigation(() => setView('structure'))}>Structure</button>
                 </div> : null}
+                {selectedTable ? <button className="quiet-action workspace-refresh" type="button" aria-label="Refresh" title="Refresh" onClick={() => guardNavigation(() => setRefreshKey((value) => value + 1))}>
+                  <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M14.8 5.1A6.5 6.5 0 1 0 15.5 9M14.8 5.1V1.8M14.8 5.1h-3.3" /></svg>
+                </button> : null}
               </div>
 
               {!selectedTable ? (
@@ -676,14 +679,6 @@ function App() {
                 </div>
               ) : (
                 <div className="table-workspace" id="table-view-panel" role="tabpanel" aria-labelledby={view === 'data' ? 'table-view-data-tab' : 'table-view-structure-tab'} tabIndex={0}>
-                  <div className="table-title-row">
-                    <div>
-                      <div className="table-breadcrumb"><span>{selectedTable.schema}</span><svg viewBox="0 0 16 16" fill="none"><path d="m6 3 5 5-5 5" /></svg><span>table</span></div>
-                      <h2>{selectedTable.name}</h2>
-                    </div>
-                    {tableData ? <div className="row-count"><strong>{tableData.rowCount.toLocaleString()}</strong><span>{tableData.rowCount === 1 ? 'row' : 'rows'}</span></div> : null}
-                  </div>
-
                   {view === 'data' ? <>
                     <div className="table-toolbar">
                       <div className="toolbar-description"><span className="green-square" />{tableData ? `${pageStart.toLocaleString()}–${pageEnd.toLocaleString()} of ${tableData.rowCount.toLocaleString()} rows` : 'Table data'}</div>

@@ -230,7 +230,7 @@ test('same-named tables read and save through the selected database and protect 
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
   expect((await state(page)).saves[1][0]).toBe('primary:analytics')
   await expect(page.locator('.main-footer')).toHaveCount(0)
-  await expect(page.locator('.breadcrumbs')).toHaveText('Developmentanalyticsitems')
+  await expect(page.locator('.breadcrumbs')).toHaveText('Developmentanalyticspublicitems')
 })
 
 test('delete from the context menu removes the branch and opens the next saved connection', async ({ page }) => {
