@@ -105,7 +105,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(92, 187, 131
 .sidebar-search input { width: 100%; min-width: 0; padding: 0; color: #e8eeec; background: transparent; border: 0; outline: none; font-size: calc(10px * var(--font-scale, 1)); }
 .sidebar-search input::placeholder { color: #859392; }
 .sidebar-search kbd { flex: 0 0 auto; padding: 2px 3px; color: #8f9c9b; background: #303c40; border: 1px solid #3a484d; border-radius: 3px; font-family: inherit; font-size: calc(8px * var(--font-scale, 1)); }
-.schema-list { min-height: 0; flex: 1; overflow: auto; padding-right: 2px; scrollbar-color: #445257 transparent; scrollbar-width: thin; }
+.schema-list { min-height: 0; flex: 1; overflow: auto; padding-right: 2px; }
 .schema-group + .schema-group { margin-top: 9px; }
 .schema-label { display: flex; width: 100%; align-items: center; gap: 7px; padding: 5px 7px; color: #abb8b6; background: transparent; border: 0; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: calc(9px * var(--font-scale, 1)); text-align: left; cursor: pointer; }
 .schema-label:hover { color: #eef4f1; background: #263338; }
@@ -849,7 +849,6 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(92, 187, 131
 
 /* Spreadsheet grid and server-side pagination */
 .data-grid-wrap { border-radius: 0; }
-.data-grid-scroll { scrollbar-gutter: stable; }
 .data-grid { font-variant-numeric: tabular-nums; }
 .data-grid th { height: 36px; padding-top: 5px; padding-bottom: 5px; }
 .data-grid th span { font-weight: 600; }
@@ -1039,10 +1038,9 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(92, 187, 131
 
 .cell-value-scroll { width: 100%; overflow: hidden; white-space: nowrap; }
 .cell-value-scroll > * { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; white-space: nowrap; }
-.data-grid td.is-expanded .cell-value-scroll { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: #b5c3bd transparent; }
+.data-grid td.is-expanded .cell-value-scroll { overflow-x: auto; overflow-y: hidden; }
 .data-grid td.is-expanded .cell-value-scroll > * { width: max-content; max-width: none; overflow: visible; text-overflow: clip; }
 .data-grid:not(.selectable-grid) td:focus { position: relative; z-index: 1; background: #eaf6ed; box-shadow: inset 0 0 0 2px #82c596; }
-:root[data-theme="dark"] .data-grid td.is-expanded .cell-value-scroll { scrollbar-color: #53645c transparent; }
 :root[data-theme="dark"] .data-grid:not(.selectable-grid) td:focus { background: #203329; box-shadow: inset 0 0 0 2px #6eaa7e; }
 
 /* Cell selection and a staged, transactional table editor. */
@@ -1058,7 +1056,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(92, 187, 131
 .selectable-grid th.row-index-heading { z-index: 3; }
 .selectable-grid td[role="gridcell"] { position: relative; cursor: cell; outline: none; touch-action: pan-x pan-y; }
 .selectable-grid .row-index { cursor: pointer; }
-.selectable-grid td.is-active .cell-value-scroll { overflow-x: auto; scrollbar-width: thin; }
+.selectable-grid td.is-active .cell-value-scroll { overflow-x: auto; }
 .selectable-grid td.is-active .cell-value-scroll > * { width: max-content; max-width: none; text-overflow: clip; }
 .selectable-grid td.is-changed::after { position: absolute; top: 0; right: 0; width: 0; height: 0; border-top: 6px solid #d69a23; border-left: 6px solid transparent; content: ""; }
 .selectable-grid tbody tr.is-added td { background: #edfaf2; }
@@ -1287,7 +1285,6 @@ body,
 .sidebar-search input::placeholder,
 .sidebar-search kbd { color: var(--muted); }
 .sidebar-search kbd { background: var(--surface-raised); border-color: var(--line); }
-.schema-list { scrollbar-color: var(--line-strong) transparent; }
 .schema-label { color: var(--muted); }
 .schema-label:hover,
 .table-nav-row:hover { color: var(--ink); background: var(--control-hover); }
@@ -1853,7 +1850,7 @@ textarea:focus-visible,
 .font-size-help { margin: 8px 0 0; color: var(--muted); font-size: calc(11px * var(--font-scale, 1)); line-height: 1.45; }
 
 /* Connections contain databases, schemas, and tables. */
-.connection-list { min-height: 0; flex: 1; gap: 5px; overflow-y: auto; padding-block: 2px 12px; scrollbar-color: var(--line-strong) transparent; scrollbar-width: thin; }
+.connection-list { min-height: 0; flex: 1; gap: 5px; overflow-y: auto; padding-block: 2px 12px; }
 .connection-branch { flex-shrink: 0; min-width: 0; }
 .connection-list .connection-wrap.is-active::before { left: 0; width: 2px; }
 .connection-item { gap: 7px; padding-left: 9px; }
@@ -2021,4 +2018,45 @@ textarea:focus-visible,
   text-overflow: ellipsis;
   vertical-align: middle;
   white-space: nowrap;
+}
+
+/* Keep native scrolling while showing a slim horizontal rail only. */
+*::-webkit-scrollbar {
+  width: 0;
+  height: 9px;
+}
+
+*::-webkit-scrollbar:vertical {
+  display: none;
+  width: 0;
+}
+
+*::-webkit-scrollbar:horizontal {
+  height: 9px;
+}
+
+*::-webkit-scrollbar-track:horizontal {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb:horizontal {
+  min-width: 24px;
+  background: var(--line-strong);
+  background-clip: content-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  transition: background-color .16s ease, border-width .16s ease;
+}
+
+*::-webkit-scrollbar-thumb:horizontal:hover {
+  background-color: var(--accent, var(--muted));
+  border-width: 1px;
+}
+
+*::-webkit-scrollbar-thumb:horizontal:active {
+  border-width: 0;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
