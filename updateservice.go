@@ -387,14 +387,14 @@ func findAsset(release githubRelease, name string) (githubAsset, bool) {
 func releaseIsNewer(channel, releaseTag, current string) (bool, string) {
 	if channel == "nightly" {
 		if releaseVersion, ok := parseNightlyVersion(releaseTag); ok {
-			currentVersion, currentOK := parseSemanticVersion(current)
-			return !currentOK || compareSemanticVersions(releaseVersion, currentVersion) > 0, releaseVersion.String()
+			currentVersion, currentErr := parseSemanticVersion(current)
+			return currentErr != nil || compareSemanticVersions(releaseVersion, currentVersion) > 0, releaseVersion.String()
 		}
 		run, ok := nightlyRunNumber(releaseTag)
 		if !ok {
 			return false, ""
 		}
-		if currentVersion, currentOK := parseSemanticVersion(current); currentOK && len(currentVersion.prerelease) > 0 {
+		if currentVersion, currentErr := parseSemanticVersion(current); currentErr == nil && len(currentVersion.prerelease) > 0 {
 			return false, ""
 		}
 		currentRun, currentOK := nightlyRunNumber(current)
