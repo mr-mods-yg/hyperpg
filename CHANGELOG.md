@@ -21,8 +21,14 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 - Daily prereleases built from the `nightly` branch.
 - Stable and nightly update channels, with verified in-app downloads and restart.
 
+### Changed
+
+- Polish navigation, table headers, icons, dialogs, and theme contrast, with table actions and search in one toolbar.
+- Show the row range alongside pagination controls and keep the slim horizontal scrollbar that expands on hover.
+
 ### Fixed
 
+- Keep grid status feedback from shifting rows during selection and editing.
 - Remove duplicate in-app branding and the green connected-status badge.
 - Simplify table-view borders and remove the duplicate row range from pagination.
 - Correctly detect newer nightly releases whose sequence number has the same number of digits.
