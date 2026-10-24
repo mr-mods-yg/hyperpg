@@ -80,6 +80,8 @@ jobs:
         with:
           ref: ${{ github.event_name == 'push' && github.ref || 'nightly' }}
           fetch-depth: 0
+      - name: Check nightly release note generation
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
       - name: Resolve source commit and release channel
         id: resolve
         shell: bash
@@ -300,18 +302,17 @@ jobs:
         id: nightly
         env:
           SOURCE_SHA: ${{ needs.source.outputs.sha }}
+          RELEASE_VERSION: ${{ needs.source.outputs.version }}
         run: |
           short_sha="${SOURCE_SHA:0:7}"
-          title="${{ needs.source.outputs.version }} ($(date -u +'%Y-%m-%d'), $short_sha)"
-          tag="v${{ needs.source.outputs.version }}"
-          {
-            echo "Automated SemVer prerelease built from the \`nightly\` branch."
-            echo
-            echo "Version: \`${{ needs.source.outputs.version }}\`"
-            echo
-            echo "Commit: \`$SOURCE_SHA\`"
-            echo "Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          } > nightly-notes.md
+          title="$RELEASE_VERSION ($(date -u +'%Y-%m-%d'), $short_sha)"
+          tag="v$RELEASE_VERSION"
+          python3 .github/scripts/nightly_notes.py \
+            --version "$RELEASE_VERSION" \
+            --source "$SOURCE_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --output nightly-notes.md
           echo "title=$title" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 

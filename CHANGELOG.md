@@ -28,6 +28,7 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ### Fixed
 
+- Include new changelog entries, linked commits, and a comparison link in nightly release notes; identify rebuilds without repeating old changes.
 - Keep grid status feedback from shifting rows during selection and editing.
 - Remove duplicate in-app branding and the green connected-status badge.
 - Simplify table-view borders and remove the duplicate row range from pagination.

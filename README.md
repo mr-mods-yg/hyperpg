@@ -85,6 +85,7 @@ Set `HYPERPG_TEST_DATABASE_URL` to a disposable PostgreSQL database and run `go 
 
 - `master` is the stable line. Stable releases are created from version tags such as `v1.0.0` on commits reachable from `master`.
 - `nightly` is the prerelease line. A push to `nightly` builds a prerelease immediately; the scheduled workflow also rebuilds its latest commit daily at 02:17 UTC.
+- Nightly release notes include new changelog entries and linked commits since the previous nightly in that version series, with the latest stable release as the first nightly's baseline. Rebuilds of the same commit explicitly report no source changes.
 - Set `master` as the GitHub repository's default branch so the scheduled workflow is enabled. Push both `master` and `nightly` to the repository.
 - Each release includes a Windows executable and a Linux `tar.gz` containing the Linux executable. Linux requires GTK 4 and WebKitGTK 6.0 at runtime.
 - Choose **Stable** or **Nightly** in Settings to receive updates from that release channel. HyperPG checks for updates at launch and verifies release downloads against GitHub's SHA-256 asset digest before restarting into the update. Keep the app in a folder your user account can write to so it can update itself.
