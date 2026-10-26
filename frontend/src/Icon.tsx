@@ -1,4 +1,4 @@
-type IconName = 'plus' | 'copy' | 'table' | 'search' | 'lock' | 'chevron-left' | 'chevron-right'
+type IconName = 'plus' | 'copy' | 'table' | 'search' | 'lock' | 'chevron-left' | 'chevron-right' | 'chevrons-left' | 'chevrons-right'
 
 export default function Icon({ name, className = '' }: { name: IconName; className?: string }) {
   const paths = {
@@ -9,6 +9,8 @@ export default function Icon({ name, className = '' }: { name: IconName; classNa
     lock: <><rect x="5" y="8.5" width="10" height="8" rx="2" /><path d="M7 8.5v-3a3 3 0 0 1 6 0v3M10 12v1" /></>,
     'chevron-left': <path d="m12 5-5 5 5 5" />,
     'chevron-right': <path d="m8 5 5 5-5 5" />,
+    'chevrons-left': <><path d="m12 5-5 5 5 5" /><path d="m18 5-5 5 5 5" /></>,
+    'chevrons-right': <><path d="m5 5 5 5-5 5" /><path d="m12 5 5 5-5 5" /></>,
   }
 
   return <svg className={`ui-icon ${className}`} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>

@@ -700,10 +700,10 @@ function App() {
                       </select></label>
                       <span className="pagination-range">{pageStart.toLocaleString()}–{pageEnd.toLocaleString()} of {tableData.rowCount.toLocaleString()} rows</span>
                       <div className="pagination-actions">
-                        <button className="pagination-button" type="button" aria-label="Start page" disabled={tableLoading || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset(0))}>Start</button>
+                        <button className="pagination-button" type="button" aria-label="Start page" disabled={tableLoading || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset(0))}><Icon name="chevrons-left" />Start</button>
                         <button className="pagination-button" type="button" aria-label="Previous page" disabled={tableLoading || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset((offset) => Math.max(0, offset - pageSize)))}><Icon name="chevron-left" />Previous</button>
-                        <button className="pagination-button" type="button" aria-label="Next page" disabled={tableLoading || savingChanges || pageOffset + pageSize >= tableData.rowCount} onClick={() => guardNavigation(() => setPageOffset((offset) => offset + pageSize))}>Next<Icon name="chevron-right" /></button>
-                        <button className="pagination-button" type="button" aria-label="End page" disabled={tableLoading || savingChanges || pageOffset >= lastPageOffset} onClick={() => guardNavigation(() => setPageOffset(lastPageOffset))}>End</button>
+                        <button className="pagination-button" type="button" aria-label="Next page" disabled={tableLoading || savingChanges || pageOffset + pageSize >= tableData.rowCount} onClick={() => guardNavigation(() => setPageOffset((offset) => offset + pageSize))}>Next<Icon name="chevrons-right" /></button>
+                        <button className="pagination-button" type="button" aria-label="End page" disabled={tableLoading || savingChanges || pageOffset >= lastPageOffset} onClick={() => guardNavigation(() => setPageOffset(lastPageOffset))}>End<Icon name="chevrons-right" /></button>
                       </div>
                     </div> : null}
                   </> : <>

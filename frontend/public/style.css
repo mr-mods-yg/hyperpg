@@ -2287,3 +2287,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* Keep the current table from looking like a keyboard focus state. */
+.table-nav-entry.is-current .table-nav-row { background: transparent; box-shadow: none; }
+.table-nav-entry.is-current .table-nav-item { color: var(--muted); font-weight: 400; }
+.table-nav-entry.is-current .table-grid-icon { color: var(--muted); }
+:root[data-theme="dark"] .table-nav-entry.is-current .table-nav-row { background: transparent; }
+:root[data-theme="dark"] .table-nav-entry.is-current .table-nav-item,
+:root[data-theme="dark"] .table-nav-entry.is-current .table-grid-icon { color: var(--muted); }
