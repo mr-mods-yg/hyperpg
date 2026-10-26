@@ -1213,20 +1213,20 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(92, 187, 131
   --rail: #232428;
   --rail-raised: #2b2d31;
   --rail-muted: #b5bac1;
-  --mint: #5865f2;
-  --mint-deep: #5865f2;
-  --mint-pale: #393e72;
+  --mint: rgba(255, 255, 255, .84);
+  --mint-deep: rgba(255, 255, 255, .84);
+  --mint-pale: rgba(255, 255, 255, .08);
   --danger: #fa777c;
   --danger-pale: #482c33;
   --danger-border: #684047;
-  --accent: #5865f2;
-  --accent-hover: #4752c4;
-  --accent-foreground: #ffffff;
-  --accent-surface: #393e72;
-  --accent-shadow: rgba(88, 101, 242, .23);
-  --focus-ring: rgba(121, 132, 255, .66);
-  --focus-halo: rgba(88, 101, 242, .24);
-  --spinner-border: rgba(121, 132, 255, .3);
+  --accent: rgba(255, 255, 255, .84);
+  --accent-hover: rgba(255, 255, 255, .96);
+  --accent-foreground: #232428;
+  --accent-surface: rgba(255, 255, 255, .08);
+  --accent-shadow: rgba(255, 255, 255, .12);
+  --focus-ring: rgba(255, 255, 255, .58);
+  --focus-halo: rgba(255, 255, 255, .14);
+  --spinner-border: rgba(255, 255, 255, .26);
   --surface-raised: #36383e;
   --control-hover: #404249;
   --input-surface: #1e1f22;
@@ -1235,7 +1235,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(92, 187, 131
   --grid-hover: #3a3c43;
   --grid-index: #2b2d31;
   --grid-index-head: #292b2f;
-  --grid-selection: #424985;
+  --grid-selection: rgba(255, 255, 255, .13);
   --shadow-modal: 0 24px 72px rgba(0, 0, 0, .48), 0 3px 14px rgba(0, 0, 0, .28);
 }
 
@@ -2062,7 +2062,7 @@ textarea:focus-visible,
   --control-shadow: none;
 }
 
-:root[data-theme="discord"] { --accent-text: #aeb5ff; }
+:root[data-theme="discord"] { --accent-text: rgba(255, 255, 255, .84); }
 
 .ui-icon { display: block; flex: 0 0 16px; width: 16px; height: 16px; }
 button, input, select { transition: color .15s ease, background-color .15s ease, border-color .15s ease, box-shadow .15s ease; }
