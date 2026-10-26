@@ -4,6 +4,17 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-10-26
+
+### Added
+
+- Start and End controls for jumping to the first and last table pages.
+
+### Changed
+
+- Add clearer double-arrow indicators to pagination controls.
+- Highlight the selected table subtly in the sidebar.
+
 ## [1.0.7] - 2026-10-23
 
 ### Added
