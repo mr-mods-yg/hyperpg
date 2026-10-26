@@ -308,6 +308,7 @@ function App() {
 
   const pageStart = tableData?.rows.length ? pageOffset + 1 : 0
   const pageEnd = tableData ? Math.min(pageOffset + tableData.rows.length, tableData.rowCount) : 0
+  const lastPageOffset = tableData ? Math.max(0, Math.ceil(tableData.rowCount / pageSize) - 1) * pageSize : 0
 
   useEffect(() => {
     if (!selectedDatabase.id) {
@@ -692,8 +693,10 @@ function App() {
                         {[25, 50, 100, 250, 500].map((size) => <option key={size} value={size}>{size}</option>)}
                       </select></label>
                       <div className="pagination-actions">
+                        <button className="pagination-button" type="button" aria-label="Start page" disabled={tableLoading || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset(0))}><svg className="pagination-double-arrow" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m10 3-5 5 5 5m5-10-5 5 5 5" /></svg>Start</button>
                         <button className="pagination-button" type="button" aria-label="Previous page" disabled={tableLoading || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset((offset) => Math.max(0, offset - pageSize)))}>Previous</button>
-                        <button className="pagination-button" type="button" aria-label="Next page" disabled={tableLoading || savingChanges || pageOffset + pageSize >= tableData.rowCount} onClick={() => guardNavigation(() => setPageOffset((offset) => offset + pageSize))}>Next</button>
+                        <button className="pagination-button" type="button" aria-label="Next page" disabled={tableLoading || savingChanges || pageOffset + pageSize >= tableData.rowCount} onClick={() => guardNavigation(() => setPageOffset((offset) => offset + pageSize))}>Next<svg className="pagination-double-arrow" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5m-5-10 5 5-5 5" /></svg></button>
+                        <button className="pagination-button" type="button" aria-label="End page" disabled={tableLoading || savingChanges || pageOffset >= lastPageOffset} onClick={() => guardNavigation(() => setPageOffset(lastPageOffset))}>End<svg className="pagination-double-arrow" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5m-5-10 5 5-5 5" /></svg></button>
                       </div>
                     </div> : null}
                   </> : <>
