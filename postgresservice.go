@@ -38,12 +38,15 @@ type TableInfo struct {
 }
 
 type ColumnInfo struct {
-	Name          string `json:"name"`
-	DataType      string `json:"dataType"`
-	Nullable      bool   `json:"nullable"`
-	HasDefault    bool   `json:"hasDefault"`
-	Generated     bool   `json:"generated"`
-	AutoIncrement bool   `json:"autoIncrement"`
+	Name                 string `json:"name"`
+	DataType             string `json:"dataType"`
+	Nullable             bool   `json:"nullable"`
+	HasDefault           bool   `json:"hasDefault"`
+	Generated            bool   `json:"generated"`
+	AutoIncrement        bool   `json:"autoIncrement"`
+	DefaultValue         string `json:"defaultValue"`
+	GenerationExpression string `json:"generationExpression"`
+	IdentityGeneration   string `json:"identityGeneration"`
 }
 
 type TableData struct {

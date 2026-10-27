@@ -3,6 +3,7 @@ import { PostgresService, UpdateService } from '../bindings/changeme'
 import DataGrid, { type DataGridHandle } from './DataGrid'
 import type { TableData } from './grid'
 import ConnectionTree, { type ConnectionInfo, type TableInfo } from './ConnectionTree'
+import Icon from './Icon'
 
 type View = 'data' | 'structure'
 type Theme = 'light' | 'dark' | 'cream' | 'discord'
@@ -565,10 +566,14 @@ function App() {
   return (
     <div className={`app-shell ${resizingSidebar ? 'is-resizing-sidebar' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
       <aside className={`sidebar ${mobileNavOpen ? 'is-mobile-open' : ''}`} id="database-sidebar">
+        <div className="app-brand">
+          <img src="/hyperpg.svg" width="28" height="28" alt="" />
+          <span>HyperPG</span>
+        </div>
         <div className="sidebar-section-heading">
           <span>Connections</span>
           <button className="icon-button add-connection" type="button" onClick={openConnectionDialog} aria-label="Add a database connection" title="Add connection">
-            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 4v12M4 10h12" /></svg>
+            <Icon name="plus" />
           </button>
         </div>
 
@@ -622,7 +627,7 @@ function App() {
             {activeConnection ? <><span className="crumb-muted">{activeConnection.name}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className={selectedTable ? 'crumb-muted' : 'crumb-current'}>{selectedDatabase.name}</span>{selectedTable ? <><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-muted">{selectedTable.schema}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-current">{selectedTable.name}</span></> : null}</> : null}
           </div>
           <div className="topbar-right">
-            <button className="topbar-add" type="button" onClick={openConnectionDialog}><span>＋</span> Add connection</button>
+            <button className="topbar-add" type="button" onClick={openConnectionDialog}><Icon name="plus" /> Add connection</button>
           </div>
         </header>
 
@@ -642,6 +647,10 @@ function App() {
 
             <section className={`workspace-section ${selectedTable ? 'has-selected-table' : ''}`}>
               <div className="workspace-tabs">
+                {selectedTable ? <div className="workspace-identity">
+                  <span className="workspace-table-icon"><Icon name="table" /></span>
+                  <div><h1 title={selectedTable.name}>{selectedTable.name}</h1><span>{selectedTable.schema} schema{tableData ? ` · ${tableData.columns.length} columns` : ''}</span></div>
+                </div> : null}
                 {selectedTable ? <div className="view-switcher" role="tablist" aria-label="Table view" onKeyDown={handleTableViewKeyDown}>
                   <button id="table-view-data-tab" type="button" role="tab" aria-controls="table-view-panel" aria-selected={view === 'data'} tabIndex={view === 'data' ? 0 : -1} className={view === 'data' ? 'is-selected' : ''} onClick={() => setView('data')}>Data</button>
                   <button id="table-view-structure-tab" type="button" role="tab" aria-controls="table-view-panel" aria-selected={view === 'structure'} tabIndex={view === 'structure' ? 0 : -1} className={view === 'structure' ? 'is-selected' : ''} onClick={() => guardNavigation(() => setView('structure'))}>Structure</button>
@@ -655,7 +664,8 @@ function App() {
                 <div className="overview-content">
                   <div className="overview-intro">
                     <div>
-                      <h2>Select a table</h2>
+                      <h2>Explore your database</h2>
+                      <p>Select a table to browse its data and structure.</p>
                     </div>
                     <div className="overview-stat"><span className="stat-icon"><DatabaseIcon /></span><span><strong>{tables.length}</strong><small>tables available</small></span></div>
                   </div>
@@ -673,15 +683,11 @@ function App() {
               ) : (
                 <div className="table-workspace" id="table-view-panel" role="tabpanel" aria-labelledby={view === 'data' ? 'table-view-data-tab' : 'table-view-structure-tab'} tabIndex={0}>
                   {view === 'data' ? <>
-                    <div className="table-toolbar">
-                      <div className="toolbar-description">{tableData ? `${pageStart.toLocaleString()}–${pageEnd.toLocaleString()} of ${tableData.rowCount.toLocaleString()} rows` : 'Table data'}</div>
-                      <label className="row-search"><svg viewBox="0 0 18 18" fill="none"><circle cx="8" cy="8" r="5.4" /><path d="m12 12 3.2 3.2" /></svg><input value={rowSearch} onChange={(event) => setRowSearch(event.target.value)} placeholder="Search this page" aria-label="Search this page" /></label>
-                    </div>
                     {tableError ? <div className="notice notice-error">{tableError}</div> : null}
                     {tableLoading ? <div className="table-loading"><span className="spinner" />Loading rows…</div> : tableData ? <DataGrid
                       key={`${selectedDatabase.id}:${selectedTable.schema}:${selectedTable.name}:${pageOffset}:${pageSize}:${refreshKey}`}
                       ref={gridRef} data={tableData} connectionID={selectedDatabase.id} schema={selectedTable.schema} table={selectedTable.name}
-                      pageOffset={pageOffset} search={rowSearch} onDirtyChange={setHasPendingChanges} onSavingChange={setSavingChanges}
+                      pageOffset={pageOffset} search={rowSearch} onSearchChange={setRowSearch} onDirtyChange={setHasPendingChanges} onSavingChange={setSavingChanges}
                       onSaved={(rowCountDelta) => {
                         const remainingCount = Math.max(0, tableData.rowCount + rowCountDelta)
                         setPageOffset((offset) => Math.min(offset, Math.max(0, Math.ceil(remainingCount / pageSize) - 1) * pageSize))
@@ -692,16 +698,52 @@ function App() {
                       <label className="page-size-control"><span>Rows per page</span><select aria-label="Rows per page" value={pageSize} disabled={savingChanges} onChange={(event) => { const size = Number(event.target.value); guardNavigation(() => { setPageSize(size); setPageOffset(0) }) }}>
                         {[25, 50, 100, 250, 500].map((size) => <option key={size} value={size}>{size}</option>)}
                       </select></label>
+                      <span className="pagination-range">{pageStart.toLocaleString()}–{pageEnd.toLocaleString()} of {tableData.rowCount.toLocaleString()} rows</span>
                       <div className="pagination-actions">
-                        <button className="pagination-button" type="button" aria-label="Start page" disabled={tableLoading || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset(0))}><svg className="pagination-double-arrow" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m10 3-5 5 5 5m5-10-5 5 5 5" /></svg>Start</button>
-                        <button className="pagination-button" type="button" aria-label="Previous page" disabled={tableLoading || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset((offset) => Math.max(0, offset - pageSize)))}>Previous</button>
-                        <button className="pagination-button" type="button" aria-label="Next page" disabled={tableLoading || savingChanges || pageOffset + pageSize >= tableData.rowCount} onClick={() => guardNavigation(() => setPageOffset((offset) => offset + pageSize))}>Next<svg className="pagination-double-arrow" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5m-5-10 5 5-5 5" /></svg></button>
-                        <button className="pagination-button" type="button" aria-label="End page" disabled={tableLoading || savingChanges || pageOffset >= lastPageOffset} onClick={() => guardNavigation(() => setPageOffset(lastPageOffset))}>End<svg className="pagination-double-arrow" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5m-5-10 5 5-5 5" /></svg></button>
+                        <button className="pagination-button" type="button" aria-label="Start page" disabled={tableLoading || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset(0))}><Icon name="chevrons-left" />Start</button>
+                        <button className="pagination-button" type="button" aria-label="Previous page" disabled={tableLoading || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset((offset) => Math.max(0, offset - pageSize)))}><Icon name="chevron-left" />Previous</button>
+                        <button className="pagination-button" type="button" aria-label="Next page" disabled={tableLoading || savingChanges || pageOffset + pageSize >= tableData.rowCount} onClick={() => guardNavigation(() => setPageOffset((offset) => offset + pageSize))}>Next<Icon name="chevron-right" /></button>
+                        <button className="pagination-button" type="button" aria-label="End page" disabled={tableLoading || savingChanges || pageOffset >= lastPageOffset} onClick={() => guardNavigation(() => setPageOffset(lastPageOffset))}>End<Icon name="chevrons-right" /></button>
                       </div>
                     </div> : null}
                   </> : <>
                     <div className="structure-intro"><h3>Columns</h3><span>{tableData?.columns.length ?? 0} total</span></div>
-                    {tableLoading ? <div className="table-loading"><span className="spinner" />Loading structure…</div> : tableData ? <div className="structure-table-wrap"><table className="structure-table"><thead><tr><th>Column</th><th>Type</th><th>Nullable</th></tr></thead><tbody>{tableData.columns.map((column, index) => <tr key={column.name}><td><span className="column-order">{String(index + 1).padStart(2, '0')}</span><strong>{column.name}</strong></td><td><code>{column.dataType}</code></td><td><span className="nullable-value">{column.nullable ? 'Yes' : 'No'}</span></td></tr>)}</tbody></table></div> : null}
+                    {tableLoading ? (
+                      <div className="table-loading"><span className="spinner" />Loading structure…</div>
+                    ) : tableData ? (
+                      <div className="structure-table-wrap">
+                        <table className="structure-table" aria-label="Column structure">
+                          <thead><tr>
+                            <th scope="col">Column</th><th scope="col">Type</th><th scope="col">Nullable</th>
+                            <th scope="col">Default</th><th scope="col">Generated</th><th scope="col">Auto increment</th>
+                          </tr></thead>
+                          <tbody>{tableData.columns.map((column, index) => (
+                            <tr key={column.name}>
+                              <td><span className="column-order">{String(index + 1).padStart(2, '0')}</span><strong>{column.name}</strong></td>
+                              <td><code>{column.dataType}</code></td>
+                              <td><span className="structure-value">{column.nullable ? 'Yes' : 'No'}</span></td>
+                              <td>
+                                {column.defaultValue ? <code className="structure-expression" title={column.defaultValue}>{column.defaultValue}</code>
+                                  : column.identityGeneration ? <span className="structure-value">Identity</span>
+                                    : <span className="structure-empty">—</span>}
+                              </td>
+                              <td>
+                                {column.generated && !column.identityGeneration
+                                  ? column.generationExpression
+                                    ? <code className="structure-expression" title={column.generationExpression}>{column.generationExpression}</code>
+                                    : <span className="structure-value">Always</span>
+                                  : <span className="structure-empty">—</span>}
+                              </td>
+                              <td>
+                                {column.identityGeneration ? <span className="structure-value">Identity · {column.identityGeneration.toLowerCase()}</span>
+                                  : column.autoIncrement ? <span className="structure-value">Sequence</span>
+                                    : <span className="structure-empty">—</span>}
+                              </td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      </div>
+                    ) : null}
                   </>}
                 </div>
               )}
@@ -722,7 +764,7 @@ function App() {
               <span className="welcome-kicker">PostgreSQL workspace</span>
               <h1>Connect a database</h1>
               <p>Paste a PostgreSQL connection URL to browse its schemas, tables, and rows.</p>
-              <button className="welcome-cta" type="button" onClick={openConnectionDialog}><span>＋</span> Add a connection</button>
+              <button className="welcome-cta" type="button" onClick={openConnectionDialog}><Icon name="plus" /> Add a connection</button>
             </div>
           </div>
         )}
@@ -798,7 +840,7 @@ function App() {
               </button>
               <button className={`theme-option ${theme === 'dark' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'dark'} tabIndex={theme === 'dark' ? 0 : -1} onKeyDown={(event) => handleRadioGroupKeyDown(event, themeValues, theme, setTheme)} onClick={() => setTheme('dark')}>
                 <span className="theme-preview theme-preview-dark"><i /><i /><i /><b /></span>
-                <span className="theme-option-copy"><strong>Dark</strong><small>T3 Code charcoal</small></span>
+                <span className="theme-option-copy"><strong>Dark</strong><small>Charcoal and blue</small></span>
                 <span className="theme-radio" />
               </button>
               <button className={`theme-option ${theme === 'discord' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'discord'} tabIndex={theme === 'discord' ? 0 : -1} onKeyDown={(event) => handleRadioGroupKeyDown(event, themeValues, theme, setTheme)} onClick={() => setTheme('discord')}>

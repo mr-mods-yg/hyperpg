@@ -4,7 +4,7 @@ HyperPG is a lightweight desktop client for browsing PostgreSQL databases. Paste
 
 ## Download
 
-The latest stable release is **[v1.0.7](https://github.com/mr-mods-yg/hyperpg/releases/tag/v1.0.7)**. Download the build for your system:
+The latest stable release is **[v1.0.8](https://github.com/mr-mods-yg/hyperpg/releases/tag/v1.0.8)**. Download the build for your system:
 
 - [Windows setup installer](https://github.com/mr-mods-yg/hyperpg/releases/latest/download/hyperpg-windows-amd64-setup.exe)
 - [Linux x64](https://github.com/mr-mods-yg/hyperpg/releases/latest/download/hyperpg-linux-amd64.tar.gz)
@@ -43,6 +43,8 @@ Choose **Stable** or **Nightly** in Settings. Stable releases use version tags o
 
 You need Go 1.25, Node.js 22, and the Wails CLI `v3.0.0-beta.28`. Linux builds also need GTK 4 and WebKitGTK 6.0 development libraries.
 
+Install the frontend dependencies and run the app in development mode:
+
 ```sh
 go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
 cd frontend
@@ -51,16 +53,19 @@ cd ..
 wails3 dev
 ```
 
-Build a production app with:
+Build a production app with `wails3 build`.
 
-```sh
-wails3 build
-```
+Run `npm test` and `npm run build` in `frontend`. Install the browser once with `npx playwright install chromium`, then run `npm run test:e2e` for grid and clipboard interaction checks. Browser tests replace the desktop IPC boundary with test fixtures.
 
-## Releases
+Set `HYPERPG_TEST_DATABASE_URL` to a disposable PostgreSQL database and run `go test -tags server ./...` after building the frontend. Integration tests create and remove their own schemas and cover exact values, mixed saves, rollback, concurrent changes, and duplicate/partitioned rows. Without the variable, PostgreSQL integration tests are skipped. The release workflow runs both suites against PostgreSQL before building release assets.
 
-- `master` is the stable branch. Stable version tags such as `v1.0.0` must point to a commit on `master`. Before tagging a release, add its dated notes to `CHANGELOG.md` using [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/).
-- `nightly` is the prerelease branch. Each push creates a nightly release, and the workflow rebuilds its latest commit daily at 02:17 UTC. Set `master` as the repository's default branch so GitHub runs the scheduled workflow.
-- GitHub Actions builds a Windows setup installer and Linux x64 archive and publishes them on the release page.
+## Release branches
+
+- `master` is the stable line. Stable releases are created from version tags such as `v1.0.0` on commits reachable from `master`.
+- `nightly` is the prerelease line. A push to `nightly` builds a prerelease immediately; the scheduled workflow also rebuilds its latest commit daily at 02:17 UTC.
+- Nightly release notes include new changelog entries and linked commits since the previous nightly in that version series, with the latest stable release as the first nightly's baseline. Rebuilds of the same commit explicitly report no source changes.
+- Set `master` as the GitHub repository's default branch so the scheduled workflow is enabled. Push both `master` and `nightly` to the repository.
+- GitHub Actions builds a Windows setup installer and Linux x64 archive and publishes them on the release page. Linux builds require GTK 4 and WebKitGTK 6.0 at runtime.
+- Choose **Stable** or **Nightly** in Settings to receive updates from that release channel. HyperPG checks for updates at launch and verifies release downloads against GitHub's SHA-256 asset digest before restarting into the update. Keep the app in a folder your user account can write to so it can update itself.
 
 See the [changelog](CHANGELOG.md) for release history and the [release workflow](.github/workflows/release.yml) for build details.

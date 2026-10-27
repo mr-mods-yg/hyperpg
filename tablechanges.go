@@ -33,7 +33,8 @@ func readTableColumns(ctx context.Context, db tableQuerier, schema, table string
 		SELECT column_name, data_type, is_nullable = 'YES',
 		       column_default IS NOT NULL OR is_identity = 'YES',
 		       is_generated = 'ALWAYS' OR (is_identity = 'YES' AND identity_generation = 'ALWAYS'),
-		       is_identity = 'YES' OR COALESCE(column_default LIKE 'nextval(%', false)
+		       is_identity = 'YES' OR COALESCE(column_default LIKE 'nextval(%', false),
+		       COALESCE(column_default, ''), COALESCE(generation_expression, ''), COALESCE(identity_generation, '')
 		FROM information_schema.columns
 		WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position`, schema, table)
 	if err != nil {
@@ -43,7 +44,7 @@ func readTableColumns(ctx context.Context, db tableQuerier, schema, table string
 	columns := make([]ColumnInfo, 0)
 	for rows.Next() {
 		var column ColumnInfo
-		if err := rows.Scan(&column.Name, &column.DataType, &column.Nullable, &column.HasDefault, &column.Generated, &column.AutoIncrement); err != nil {
+		if err := rows.Scan(&column.Name, &column.DataType, &column.Nullable, &column.HasDefault, &column.Generated, &column.AutoIncrement, &column.DefaultValue, &column.GenerationExpression, &column.IdentityGeneration); err != nil {
 			return nil, fmt.Errorf("Could not read table columns: %w", err)
 		}
 		columns = append(columns, column)

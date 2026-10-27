@@ -73,8 +73,19 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 - Transactional table saves with concurrent-edit detection, including tables without primary keys and partitioned tables.
 - Per-user Windows setup installer used for installation and in-app updates.
 
+### Changed
+
+- Polish navigation, table headers, icons, dialogs, and theme contrast, with table actions and search in one toolbar.
+- Show the row range alongside pagination controls and keep the slim horizontal scrollbar that expands on hover.
+
 ### Fixed
 
+- Include new changelog entries, linked commits, and a comparison link in nightly release notes; identify rebuilds without repeating old changes.
+- Keep grid status feedback from shifting rows during selection and editing.
+- Remove duplicate in-app branding and the green connected-status badge.
+- Simplify table-view borders and remove the duplicate row range from pagination.
+- Correctly detect newer nightly releases whose sequence number has the same number of digits.
+- Restore sidebar resizing by preventing a fixed width from overriding the dragged width.
 - Expand the focus border across selected cells, including separate ranges, without outlining interior cells.
 - Simplify sidebar table navigation to name labels without column dropdowns.
 - Preserve exact large integers, decimal values, arrays, and binary values when reading table data.
