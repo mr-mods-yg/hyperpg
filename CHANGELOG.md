@@ -4,22 +4,74 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-10-26
+
+### Added
+
+- Start and End controls for jumping to the first and last table pages.
+
+### Changed
+
+- Add clearer double-arrow indicators to pagination controls.
+- Highlight the selected table subtly in the sidebar.
+
+## [1.0.7] - 2026-10-23
+
 ### Added
 
 - Connection context menus and editing for saved names, URLs, and database visibility.
-- A nested connections → databases → schemas → tables sidebar, with optional browsing of all accessible databases on a server.
-- A table workspace that uses 90% of the main pane and keeps table context in the connection, database, schema, and table breadcrumbs.
-- A wider, shorter Settings dialog with a single-row theme chooser.
-- A cleaner table workspace without the connection and save-state footer text.
-- Grid selection and keyboard hints stay hidden until there is feedback to show.
+- A connections → databases → schemas → tables sidebar, with optional browsing of all accessible databases on a server.
+- Cream and Discord themes alongside Light and Dark, plus an adjustable font size in pixels.
+
+### Changed
+
+- Let the table workspace use 90% of the main pane and show its full context in breadcrumbs.
+- Widen Settings and arrange theme choices in a single row on desktop.
+- Simplify table borders and pagination, remove duplicate in-app branding and the connected-status badge, and hide static grid hints.
+- Use semantic versions for nightly releases.
+
+### Fixed
+
+- Detect newer nightly releases correctly, including sequence numbers with the same number of digits.
+- Restore sidebar resizing and save the chosen width on this device.
+
+## [1.0.6] - 2026-10-22
+
+### Fixed
+
+- Keep loading spinners animated when the system reduced-motion preference is enabled.
+
+## [1.0.5] - 2026-10-21
+
+### Fixed
+
+- Open the Windows setup installer visibly for in-app updates, reuse the existing install folder, and launch HyperPG from the installer's Finish page.
+- Download Windows installers to the temporary folder so updates do not require write access beside the app.
+
+### Upgrade note
+
+- When updating from v1.0.4 or older, run the v1.0.5 setup installer once manually. Later in-app updates open the setup wizard directly.
+
+## [1.0.4] - 2026-10-21
+
+### Fixed
+
+- Show a Windows update progress window with visible errors if installation fails.
+- Keep the progress window open while the installer runs, then close it after HyperPG restarts.
+
+### Upgrade note
+
+- When updating from v1.0.3 or older, run the v1.0.4 setup installer once manually to replace the older hidden updater helper. Later in-app updates show the progress window.
+
+## [1.0.3] - 2026-10-21
+
+### Added
+
 - Multi-cell selection with drag, Shift, Ctrl/Cmd, arrow keys, and CSV clipboard copying.
 - Editable table cells with staged changes, Save/Discard controls, and unsaved-change navigation prompts.
 - Row context menus for adding, duplicating, deleting, restoring, setting NULL, and reverting cells.
 - Transactional table saves with concurrent-edit detection, including tables without primary keys and partitioned tables.
-- Automated grid browser checks and PostgreSQL integration checks before publishing releases.
-- GitHub release builds for Windows and Linux.
-- Daily prereleases built from the `nightly` branch.
-- Stable and nightly update channels, with verified in-app downloads and restart.
+- Per-user Windows setup installer used for installation and in-app updates.
 
 ### Changed
 
@@ -34,7 +86,36 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 - Simplify table-view borders and remove the duplicate row range from pagination.
 - Correctly detect newer nightly releases whose sequence number has the same number of digits.
 - Restore sidebar resizing by preventing a fixed width from overriding the dragged width.
+- Expand the focus border across selected cells, including separate ranges, without outlining interior cells.
 - Simplify sidebar table navigation to name labels without column dropdowns.
-- Expand the focus border around the full cell selection, including separate ranges, without outlines around interior cells.
 - Preserve exact large integers, decimal values, arrays, and binary values when reading table data.
 - Display actual column nullability in the Structure view.
+- Install Windows updates reliably, restart the app, and roll back to the previous executable if installation fails.
+
+## [1.0.2] - 2026-10-19
+
+### Added
+
+- Horizontally scrollable full values for selected table cells.
+- Focus highlighting and Ctrl+A selection scoped to the focused cell's value.
+
+### Fixed
+
+- Replaced the Windows updater's hidden PowerShell command with a native helper process.
+
+## [1.0.1] - 2026-10-19
+
+### Added
+
+- Windows setup installer with Start Menu and desktop shortcuts, alongside the portable executable.
+
+## [1.0.0] - 2026-10-19
+
+### Added
+
+- Read-only PostgreSQL browser for browsing schemas, tables, columns, and paginated rows.
+- Local SQLite storage for saved database connections, encrypted with a key stored in the operating system credential store.
+- Resizable and collapsible schema navigation, light and dark themes, and configurable rows per page.
+- GitHub release builds for Windows and Linux.
+- Daily prereleases built from the `nightly` branch.
+- Stable and nightly update channels, with SHA-256 verified in-app downloads and restart.
