@@ -38,7 +38,7 @@ Choose **Stable** or **Nightly** in Settings. Stable releases use version tags o
 - Ctrl/Cmd+C or **Copy CSV** copies selected values as CSV with quoted commas, quotes, and line breaks. Disjoint selections retain their positions inside the selected rectangle; unselected fields and NULL values are empty. Column headers are omitted.
 - Double-click a cell or press Enter/F2 to edit. Enter finishes editing, Shift+Enter inserts a line break, and Escape cancels the current cell edit. Generated columns are read-only.
 - **Save changes** (Ctrl/Cmd+S) applies the draft in one transaction. **Discard changes** restores the loaded page. Navigation asks how to handle an unsaved draft.
-- Right-click to add, duplicate, delete, restore, set NULL, or revert cells. New rows use PostgreSQL defaults for untouched cells.
+- Right-click a cell to add a row above or below it, duplicate, delete or restore rows, set NULL, or revert cells. New rows use PostgreSQL defaults for untouched cells. Their position is temporary: after saving, rows are ordered by primary key, or by physical location when there is no primary key.
 
 ## Running SQL scripts
 

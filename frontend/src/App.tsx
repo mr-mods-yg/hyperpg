@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { PostgresService, UpdateService } from '../bindings/changeme'
 import DataGrid, { type DataGridHandle } from './DataGrid'
 import type { TableData } from './grid'
@@ -10,6 +10,16 @@ type View = 'data' | 'structure'
 type Theme = 'light' | 'dark' | 'cream' | 'discord'
 type UpdateChannel = 'stable' | 'nightly'
 type UpdateInfo = { available: boolean; version: string; releaseUrl: string; installError?: string }
+type CachedTablePage = {
+  databaseId: string
+  schema: string
+  table: string
+  offset: number
+  refreshKey: number
+  data: TableData
+  limit: number
+  appliedSize: number
+}
 
 const SIDEBAR_MIN_WIDTH = 190
 const SIDEBAR_MAX_WIDTH = 420
@@ -45,13 +55,15 @@ function App() {
   const [connectionRevisions, setConnectionRevisions] = useState<Record<string, number>>({})
   const [tables, setTables] = useState<TableInfo[]>([])
   const [selectedTable, setSelectedTable] = useState<TableInfo | null>(null)
-  const [tableData, setTableData] = useState<TableData | null>(null)
+  const [loadedTableData, setTableData] = useState<TableData | null>(null)
+  const tablePage = useRef<CachedTablePage | null>(null)
   const gridRef = useRef<DataGridHandle>(null)
   const [hasPendingChanges, setHasPendingChanges] = useState(false)
   const [savingChanges, setSavingChanges] = useState(false)
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
   const [tablesLoading, setTablesLoading] = useState(false)
   const [tableLoading, setTableLoading] = useState(false)
+  const [tableSelectionVersion, setTableSelectionVersion] = useState(0)
   const [tablesError, setTablesError] = useState('')
   const [tableError, setTableError] = useState('')
   const [savedConnectionsError, setSavedConnectionsError] = useState('')
@@ -123,6 +135,14 @@ function App() {
   })
 
   const activeConnection = connections.find((connection) => connection.id === selectedConnectionId) ?? null
+  const cachedPage = tablePage.current
+  const sameTablePage = cachedPage && cachedPage.databaseId === selectedDatabase.id && cachedPage.schema === selectedTable?.schema &&
+    cachedPage.table === selectedTable?.name && cachedPage.offset === pageOffset
+  const tableData = sameTablePage ? loadedTableData : null
+  const tableStale = !!sameTablePage && cachedPage.refreshKey !== refreshKey
+  const tableBusy = tableLoading || (tableStale && !tableError)
+  const loadedBytes = useMemo(() => tableData?.rows.length ? new TextEncoder().encode(JSON.stringify(tableData.rows)).byteLength : 0, [tableData])
+  const tableActivity = savingChanges ? 'Saving changes' : tableBusy ? tableStale ? 'Refreshing rows' : 'Loading rows' : ''
   const sidebarMaxWidth = Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, window.innerWidth - 320))
   const themeValues: Theme[] = ['light', 'cream', 'dark', 'discord']
   const updateChannelValues: UpdateChannel[] = ['stable', 'nightly']
@@ -312,7 +332,11 @@ function App() {
 
   const pageStart = tableData?.rows.length ? pageOffset + 1 : 0
   const pageEnd = tableData ? Math.min(pageOffset + tableData.rows.length, tableData.rowCount) : 0
-  const lastPageOffset = tableData ? Math.max(0, Math.ceil(tableData.rowCount / pageSize) - 1) * pageSize : 0
+  // A size change keeps the first visible row, so subsequent pages are based
+  // on that position rather than forcing the user back to a page boundary.
+  const lastPageOffset = tableData && tableData.rowCount > 0
+    ? pageOffset + Math.max(0, Math.floor((tableData.rowCount - 1 - pageOffset) / pageSize)) * pageSize
+    : 0
 
   useEffect(() => {
     if (!selectedDatabase.id) {
@@ -342,32 +366,83 @@ function App() {
 
   useEffect(() => {
     if (!selectedDatabase.id || !selectedTable) {
+      tablePage.current = null
       setTableData(null)
       setTableLoading(false)
       return
     }
 
     let cancelled = false
-    setTableLoading(true)
-    setTableData(null)
-    setTableError('')
-    PostgresService.GetTableData(selectedDatabase.id, selectedTable.schema, selectedTable.name, pageSize, pageOffset)
-      .then((result) => {
-        if (!cancelled) {
-          setTableData({
-            columns: result.columns ?? [],
-            rows: (result.rows ?? []).map((row) => row ?? []),
-            rowCount: result.rowCount ?? 0,
-            identities: result.identities ?? [],
-          })
+    const current = tablePage.current
+    const sameLocation = current && current.databaseId === selectedDatabase.id && current.schema === selectedTable.schema &&
+      current.table === selectedTable.name && current.offset === pageOffset
+    const samePage = sameLocation && current.refreshKey === refreshKey
+
+    if (samePage && pageSize <= current.limit) {
+      current.appliedSize = pageSize
+      setTableData(sliceTablePage(current.data, pageSize))
+      setTableLoading(false)
+    } else if (samePage) {
+      // Read the last cached row again to detect a shift in the ordered page
+      // before appending. A concurrent change falls back to a fresh page read.
+      const overlap = current.data.rows.length > 0 ? 1 : 0
+      const extraOffset = pageOffset + current.data.rows.length - overlap
+      const extraLimit = pageSize - current.data.rows.length + overlap
+      setTableData(sliceTablePage(current.data, pageSize))
+      setTableLoading(true)
+      const loadMore = async () => {
+        try {
+          const extra = normalizeTableData(await PostgresService.GetTableData(selectedDatabase.id, selectedTable.schema, selectedTable.name, extraLimit, extraOffset))
+          if (cancelled) return
+          const previousBoundary = current.data.identities[current.data.rows.length - 1]
+          const nextBoundary = extra.identities[0]
+          const boundaryMatches = !overlap || (
+            previousBoundary && nextBoundary &&
+            previousBoundary.tableOID === nextBoundary.tableOID && previousBoundary.ctid === nextBoundary.ctid && previousBoundary.version === nextBoundary.version &&
+            extra.rows.length > 0
+          )
+          const canAppend = boundaryMatches && JSON.stringify(current.data.columns) === JSON.stringify(extra.columns)
+          const data = canAppend
+            ? { ...extra, rows: [...current.data.rows, ...extra.rows.slice(overlap)], identities: [...current.data.identities, ...extra.identities.slice(overlap)] }
+            : normalizeTableData(await PostgresService.GetTableData(selectedDatabase.id, selectedTable.schema, selectedTable.name, pageSize, pageOffset))
+          if (cancelled) return
+          if (!canAppend) setTableSelectionVersion((version) => version + 1)
+          current.data = data
+          current.limit = pageSize
+          current.appliedSize = pageSize
+          setTableData(sliceTablePage(data, pageSize))
+        } catch (error: unknown) {
+          if (!cancelled) {
+            setTableError(errorMessage(error, 'Could not load more rows.'))
+            setPageSize(current.appliedSize)
+          }
+        } finally {
+          if (!cancelled) setTableLoading(false)
         }
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) setTableError(errorMessage(error, 'Could not load this table.'))
-      })
-      .finally(() => {
-        if (!cancelled) setTableLoading(false)
-      })
+      }
+      void loadMore()
+    } else {
+      if (!sameLocation) {
+        tablePage.current = null
+        setTableData(null)
+      }
+      setTableLoading(true)
+      setTableError('')
+      PostgresService.GetTableData(selectedDatabase.id, selectedTable.schema, selectedTable.name, pageSize, pageOffset)
+        .then((result) => {
+          if (!cancelled) {
+            const data = normalizeTableData(result)
+            tablePage.current = { databaseId: selectedDatabase.id, schema: selectedTable.schema, table: selectedTable.name, offset: pageOffset, refreshKey, data, limit: pageSize, appliedSize: pageSize }
+            setTableData(data)
+          }
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) setTableError(errorMessage(error, 'Could not load this table.'))
+        })
+        .finally(() => {
+          if (!cancelled) setTableLoading(false)
+        })
+    }
 
     return () => { cancelled = true }
   }, [selectedDatabase.id, selectedTable?.schema, selectedTable?.name, pageSize, pageOffset, refreshKey])
@@ -661,7 +736,7 @@ function App() {
                   <button id="table-view-data-tab" type="button" role="tab" aria-controls="table-view-panel" aria-selected={view === 'data'} tabIndex={view === 'data' ? 0 : -1} className={view === 'data' ? 'is-selected' : ''} onClick={() => setView('data')}>Data</button>
                   <button id="table-view-structure-tab" type="button" role="tab" aria-controls="table-view-panel" aria-selected={view === 'structure'} tabIndex={view === 'structure' ? 0 : -1} className={view === 'structure' ? 'is-selected' : ''} onClick={() => guardNavigation(() => setView('structure'))}>Structure</button>
                 </div> : null}
-                {selectedTable ? <button className="quiet-action workspace-refresh" type="button" aria-label="Refresh" title="Refresh" onClick={() => guardNavigation(() => setRefreshKey((value) => value + 1))}>
+                {selectedTable ? <button className="quiet-action workspace-refresh" type="button" aria-label="Refresh" title="Refresh" disabled={tableBusy || savingChanges} onClick={() => guardNavigation(() => setRefreshKey((value) => value + 1))}>
                   <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M14.8 5.1A6.5 6.5 0 1 0 15.5 9M14.8 5.1V1.8M14.8 5.1h-3.3" /></svg>
                 </button> : null}
               </div>
@@ -688,33 +763,33 @@ function App() {
                 </div>
               ) : (
                 <div className="table-workspace" id="table-view-panel" role="tabpanel" aria-labelledby={view === 'data' ? 'table-view-data-tab' : 'table-view-structure-tab'} tabIndex={0}>
+                  {tableError ? <div className="notice notice-error" role="alert">{tableError}</div> : null}
                   {view === 'data' ? <>
-                    {tableError ? <div className="notice notice-error">{tableError}</div> : null}
-                    {tableLoading ? <div className="table-loading"><span className="spinner" />Loading rows…</div> : tableData ? <DataGrid
-                      key={`${selectedDatabase.id}:${selectedTable.schema}:${selectedTable.name}:${pageOffset}:${pageSize}:${refreshKey}`}
+                    {tableData ? <DataGrid
+                      key={`${selectedDatabase.id}:${selectedTable.schema}:${selectedTable.name}:${pageOffset}:${cachedPage!.refreshKey}`}
                       ref={gridRef} data={tableData} connectionID={selectedDatabase.id} schema={selectedTable.schema} table={selectedTable.name}
-                      pageOffset={pageOffset} search={rowSearch} onSearchChange={setRowSearch} onDirtyChange={setHasPendingChanges} onSavingChange={setSavingChanges}
+                      pageOffset={pageOffset} loading={tableBusy} readOnly={tableStale} selectionVersion={tableSelectionVersion} search={rowSearch} onSearchChange={setRowSearch} onDirtyChange={setHasPendingChanges} onSavingChange={setSavingChanges}
                       onSaved={(rowCountDelta) => {
                         const remainingCount = Math.max(0, tableData.rowCount + rowCountDelta)
                         setPageOffset((offset) => Math.min(offset, Math.max(0, Math.ceil(remainingCount / pageSize) - 1) * pageSize))
                         setRefreshKey((value) => value + 1)
                       }}
-                    /> : null}
+                    /> : tableBusy ? <div className="table-loading"><span className="spinner" />Loading rows…</div> : null}
                     {tableData ? <div className="grid-pagination">
-                      <label className="page-size-control"><span>Rows per page</span><select aria-label="Rows per page" value={pageSize} disabled={savingChanges} onChange={(event) => { const size = Number(event.target.value); guardNavigation(() => { setPageSize(size); setPageOffset(0) }) }}>
+                      <label className="page-size-control"><span>Rows per page</span><select aria-label="Rows per page" value={pageSize} disabled={savingChanges || tableStale} onChange={(event) => { const size = Number(event.target.value); guardNavigation(() => { setTableError(''); setPageSize(size) }) }}>
                         {[25, 50, 100, 250, 500].map((size) => <option key={size} value={size}>{size}</option>)}
                       </select></label>
                       <span className="pagination-range">{pageStart.toLocaleString()}–{pageEnd.toLocaleString()} of {tableData.rowCount.toLocaleString()} rows</span>
                       <div className="pagination-actions">
-                        <button className="pagination-button" type="button" aria-label="Start page" disabled={tableLoading || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset(0))}><Icon name="chevrons-left" />Start</button>
-                        <button className="pagination-button" type="button" aria-label="Previous page" disabled={tableLoading || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset((offset) => Math.max(0, offset - pageSize)))}><Icon name="chevron-left" />Previous</button>
-                        <button className="pagination-button" type="button" aria-label="Next page" disabled={tableLoading || savingChanges || pageOffset + pageSize >= tableData.rowCount} onClick={() => guardNavigation(() => setPageOffset((offset) => offset + pageSize))}>Next<Icon name="chevron-right" /></button>
-                        <button className="pagination-button" type="button" aria-label="End page" disabled={tableLoading || savingChanges || pageOffset >= lastPageOffset} onClick={() => guardNavigation(() => setPageOffset(lastPageOffset))}>End<Icon name="chevrons-right" /></button>
+                        <button className="pagination-button" type="button" aria-label="Start page" disabled={tableBusy || tableStale || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset(0))}><Icon name="chevrons-left" />Start</button>
+                        <button className="pagination-button" type="button" aria-label="Previous page" disabled={tableBusy || tableStale || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset((offset) => Math.max(0, offset - pageSize)))}><Icon name="chevron-left" />Previous</button>
+                        <button className="pagination-button" type="button" aria-label="Next page" disabled={tableBusy || tableStale || savingChanges || pageOffset + pageSize >= tableData.rowCount} onClick={() => guardNavigation(() => setPageOffset((offset) => offset + pageSize))}>Next<Icon name="chevron-right" /></button>
+                        <button className="pagination-button" type="button" aria-label="End page" disabled={tableBusy || tableStale || savingChanges || pageOffset >= lastPageOffset} onClick={() => guardNavigation(() => setPageOffset(lastPageOffset))}>End<Icon name="chevrons-right" /></button>
                       </div>
                     </div> : null}
                   </> : <>
                     <div className="structure-intro"><h3>Columns</h3><span>{tableData?.columns.length ?? 0} total</span></div>
-                    {tableLoading ? (
+                    {tableBusy && !tableData ? (
                       <div className="table-loading"><span className="spinner" />Loading structure…</div>
                     ) : tableData ? (
                       <div className="structure-table-wrap">
@@ -751,6 +826,11 @@ function App() {
                       </div>
                     ) : null}
                   </>}
+                  <div className="table-statusbar">
+                    {tableActivity ? <div className="table-progress" role="progressbar" aria-label={tableActivity}><span /></div> : null}
+                    <span className="table-status-metrics" title="Fetched rows on this page; size is the estimated UTF-8 JSON size of row values, excluding metadata and network overhead.">{tableData ? `${tableData.rows.length.toLocaleString()} ${tableData.rows.length === 1 ? 'row' : 'rows'} · ~${formatBytes(loadedBytes)}` : '—'}</span>
+                    <span className="table-status-activity" role="status" aria-live="polite">{tableActivity ? `${tableActivity}…` : tableStale && tableError ? 'Refresh failed' : ''}</span>
+                  </div>
                 </div>
               )}
             </section>
@@ -889,6 +969,28 @@ function App() {
 
 function DatabaseIcon() {
   return <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><ellipse cx="10" cy="4.5" rx="6.5" ry="2.5" /><path d="M3.5 4.5v5c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5v-5M3.5 9.5v5c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5v-5" /><path d="M3.5 9.5C3.5 10.9 6.4 12 10 12s6.5-1.1 6.5-2.5" /></svg>
+}
+
+function normalizeTableData(result: Awaited<ReturnType<typeof PostgresService.GetTableData>>): TableData {
+  return {
+    columns: result.columns ?? [],
+    rows: (result.rows ?? []).map((row) => row ?? []),
+    rowCount: result.rowCount ?? 0,
+    identities: result.identities ?? [],
+  }
+}
+
+function sliceTablePage(data: TableData, limit: number): TableData {
+  return { ...data, rows: data.rows.slice(0, limit), identities: data.identities.slice(0, limit) }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  const units = ['KiB', 'MiB', 'GiB']
+  let value = bytes / 1024
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++ }
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`
 }
 
 function errorMessage(error: unknown, fallback: string) {
