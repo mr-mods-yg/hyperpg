@@ -4,6 +4,7 @@ import DataGrid, { type DataGridHandle } from './DataGrid'
 import type { TableData } from './grid'
 import ConnectionTree, { type ConnectionInfo, type TableInfo } from './ConnectionTree'
 import Icon from './Icon'
+import SqlEditor from './SqlEditor'
 
 type View = 'data' | 'structure'
 type Theme = 'light' | 'dark' | 'cream' | 'discord'
@@ -68,6 +69,8 @@ function App() {
   const [showUrl, setShowUrl] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [view, setView] = useState<View>('data')
+  const [showSql, setShowSql] = useState(false)
+  const [sqlDrafts, setSqlDrafts] = useState<Record<string, string>>({})
   const [rowSearch, setRowSearch] = useState('')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -556,6 +559,7 @@ function App() {
   const selectTable = (table: TableInfo) => guardNavigation(() => showTable(table))
 
   const showTable = (table: TableInfo) => {
+    setShowSql(false)
     setSelectedTable(table)
     setPageOffset(0)
     setRowSearch('')
@@ -627,12 +631,14 @@ function App() {
             {activeConnection ? <><span className="crumb-muted">{activeConnection.name}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className={selectedTable ? 'crumb-muted' : 'crumb-current'}>{selectedDatabase.name}</span>{selectedTable ? <><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-muted">{selectedTable.schema}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-current">{selectedTable.name}</span></> : null}</> : null}
           </div>
           <div className="topbar-right">
+            {activeConnection ? <button className="topbar-add" type="button" onClick={() => guardNavigation(() => setShowSql((value) => !value))}>{showSql ? 'Database' : 'New SQL script'}</button> : null}
             <button className="topbar-add" type="button" onClick={openConnectionDialog}><Icon name="plus" /> Add connection</button>
           </div>
         </header>
 
         {activeConnection ? (
           <div className="content-area">
+            {showSql ? <SqlEditor key={selectedDatabase.id} databaseId={selectedDatabase.id} databaseName={selectedDatabase.name} script={sqlDrafts[selectedDatabase.id] ?? ''} onScriptChange={(script) => setSqlDrafts((drafts) => ({ ...drafts, [selectedDatabase.id]: script }))} onExecuted={() => setRefreshKey((value) => value + 1)} /> : <>
             {!selectedTable ? <section className="database-header">
               <div>
                 <h1>{selectedDatabase.name}</h1>
@@ -748,6 +754,7 @@ function App() {
                 </div>
               )}
             </section>
+            </> }
           </div>
         ) : (
           <div className="welcome-area">
@@ -763,7 +770,6 @@ function App() {
               </div>
               <span className="welcome-kicker">PostgreSQL workspace</span>
               <h1>Connect a database</h1>
-              <p>Paste a PostgreSQL connection URL to browse its schemas, tables, and rows.</p>
               <button className="welcome-cta" type="button" onClick={openConnectionDialog}><Icon name="plus" /> Add a connection</button>
             </div>
           </div>
@@ -802,16 +808,16 @@ function App() {
         <section className="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
           <button className="dialog-close" type="button" aria-label="Close" onClick={() => setShowConnectionDialog(false)} disabled={connecting}><svg viewBox="0 0 18 18" fill="none"><path d="m4 4 10 10M14 4 4 14" /></svg></button>
           <div className="dialog-icon"><DatabaseIcon /></div>
-          <div className="dialog-heading"><h2 id="dialog-title">{editingConnectionId ? 'Edit connection' : 'New connection'}</h2><p>{editingConnectionId ? 'Update the connection name, URL, and database visibility.' : 'Paste a PostgreSQL connection URL to get started.'}</p></div>
+          <div className="dialog-heading"><h2 id="dialog-title">{editingConnectionId ? 'Edit connection' : 'New connection'}</h2></div>
           <form onSubmit={handleConnect}>
             <label className="field-label" htmlFor="connection-name">Connection name <span>Optional</span></label>
             <input id="connection-name" className="dialog-input" value={connectionName} onChange={(event) => setConnectionName(event.target.value)} placeholder="e.g. Production" autoComplete="off" disabled={connecting} />
             <label className="field-label connection-url-label" htmlFor="connection-url">Database URL</label>
-            <div className="url-input-wrap"><input id="connection-url" className="dialog-input url-input" value={connectionUrl} onChange={(event) => setConnectionUrl(event.target.value)} placeholder={editingConnectionId ? 'Leave blank to keep the saved URL' : 'postgresql://user:password@host:5432/dbname'} type={showUrl ? 'text' : 'password'} autoComplete="off" autoFocus required={!editingConnectionId} disabled={connecting} aria-describedby={editingConnectionId ? 'connection-url-hint' : undefined} /><button className="reveal-url" type="button" onClick={() => setShowUrl((visible) => !visible)} aria-label={showUrl ? 'Hide URL' : 'Show URL'}>{showUrl ? <svg viewBox="0 0 20 20" fill="none"><path d="M3 3 17 17M8.6 8.7a2 2 0 0 0 2.7 2.7M7.1 5.3A9.8 9.8 0 0 1 10 4.8c4.6 0 7.5 4.1 8 5.2-.2.5-1 1.8-2.4 2.9M5.2 6.7C3.5 7.8 2.4 9.5 2 10c.5 1.1 3.4 5.2 8 5.2 1 0 1.9-.2 2.7-.6" /></svg> : <svg viewBox="0 0 20 20" fill="none"><path d="M2 10s2.8-5.2 8-5.2 8 5.2 8 5.2-2.8 5.2-8 5.2S2 10 2 10Z" /><circle cx="10" cy="10" r="2.2" /></svg>}</button></div>
-            {editingConnectionId ? <p className="field-hint" id="connection-url-hint">Enter a new URL to replace the saved one, or leave it blank to keep it.</p> : null}
+            <div className="url-input-wrap"><input id="connection-url" className="dialog-input url-input" value={connectionUrl} onChange={(event) => setConnectionUrl(event.target.value)} placeholder={editingConnectionId ? 'Leave blank to keep the saved URL' : 'postgresql://user:password@host:5432/dbname'} type={showUrl ? 'text' : 'password'} autoComplete="off" autoFocus required={!editingConnectionId} disabled={connecting} aria-describedby={editingConnectionId ? 'connection-url-hint' : undefined} /><button className="reveal-url" type="button" disabled={connecting} onClick={() => setShowUrl((visible) => !visible)} aria-label={showUrl ? 'Hide URL' : 'Show URL'}>{showUrl ? <svg viewBox="0 0 20 20" fill="none"><path d="M3 3 17 17M8.6 8.7a2 2 0 0 0 2.7 2.7M7.1 5.3A9.8 9.8 0 0 1 10 4.8c4.6 0 7.5 4.1 8 5.2-.2.5-1 1.8-2.4 2.9M5.2 6.7C3.5 7.8 2.4 9.5 2 10c.5 1.1 3.4 5.2 8 5.2 1 0 1.9-.2 2.7-.6" /></svg> : <svg viewBox="0 0 20 20" fill="none"><path d="M2 10s2.8-5.2 8-5.2 8 5.2 8 5.2-2.8 5.2-8 5.2S2 10 2 10Z" /><circle cx="10" cy="10" r="2.2" /></svg>}</button></div>
+            {editingConnectionId ? <p className="field-hint" id="connection-url-hint">Leave blank to keep the saved URL.</p> : null}
             <label className="connection-option" htmlFor="show-all-databases">
               <input id="show-all-databases" type="checkbox" checked={showAllDatabases} onChange={(event) => setShowAllDatabases(event.target.checked)} disabled={connecting} aria-labelledby="show-all-databases-label" aria-describedby="show-all-databases-hint" />
-              <span><strong id="show-all-databases-label">Show all databases</strong><small id="show-all-databases-hint">Browse all accessible databases on this server. Turn off to show only the database in the URL.</small></span>
+              <span><strong id="show-all-databases-label">Show all databases</strong><small id="show-all-databases-hint">Turn off to show only the database in the URL.</small></span>
             </label>
             {connectionError ? <div className="form-error" role="alert"><svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="6.7" /><path d="M9 5.5v4M9 12.1v.1" /></svg>{connectionError}</div> : null}
             <div className="dialog-note"><svg viewBox="0 0 18 18" fill="none"><path d="M9 2.2 3.2 4.5v4.1c0 3.3 2.5 5.9 5.8 7.2 3.3-1.3 5.8-3.9 5.8-7.2V4.5L9 2.2Z" /><path d="m6.4 8.8 1.7 1.7 3.6-3.7" /></svg><span>Saved securely on this device.</span></div>
@@ -823,29 +829,28 @@ function App() {
       {showSettingsDialog ? <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowSettingsDialog(false) }}>
         <section className="connection-dialog settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
           <button className="dialog-close" type="button" aria-label="Close settings" onClick={() => setShowSettingsDialog(false)}><svg viewBox="0 0 18 18" fill="none"><path d="m4 4 10 10M14 4 4 14" /></svg></button>
-          <div className="dialog-icon settings-icon"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.4v1.4M10 16.2v1.4M17.6 10h-1.4M3.8 10H2.4m13-5.4-1 1m-8.8 8.8-1 1m10.8 0-1-1m-8.8-8.8-1-1" /><circle cx="10" cy="10" r="4.2" /></svg></div>
-          <div className="dialog-heading"><h2 id="settings-title">Settings</h2><p>Adjust appearance and update preferences.</p></div>
+          <div className="dialog-heading"><h2 id="settings-title">Settings</h2></div>
           <div className="settings-section">
             <span className="field-label">Appearance</span>
             <div className="theme-options" role="radiogroup" aria-label="Color theme">
               <button className={`theme-option ${theme === 'light' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'light'} tabIndex={theme === 'light' ? 0 : -1} onKeyDown={(event) => handleRadioGroupKeyDown(event, themeValues, theme, setTheme)} onClick={() => setTheme('light')}>
                 <span className="theme-preview theme-preview-light"><i /><i /><i /><b /></span>
-                <span className="theme-option-copy"><strong>Light</strong><small>Soft, bright workspace</small></span>
+                <span className="theme-option-copy"><strong>Light</strong></span>
                 <span className="theme-radio" />
               </button>
               <button className={`theme-option ${theme === 'cream' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'cream'} tabIndex={theme === 'cream' ? 0 : -1} onKeyDown={(event) => handleRadioGroupKeyDown(event, themeValues, theme, setTheme)} onClick={() => setTheme('cream')}>
                 <span className="theme-preview theme-preview-cream"><i /><i /><i /><b /></span>
-                <span className="theme-option-copy"><strong>Cream</strong><small>Warm ivory and amber</small></span>
+                <span className="theme-option-copy"><strong>Cream</strong></span>
                 <span className="theme-radio" />
               </button>
               <button className={`theme-option ${theme === 'dark' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'dark'} tabIndex={theme === 'dark' ? 0 : -1} onKeyDown={(event) => handleRadioGroupKeyDown(event, themeValues, theme, setTheme)} onClick={() => setTheme('dark')}>
                 <span className="theme-preview theme-preview-dark"><i /><i /><i /><b /></span>
-                <span className="theme-option-copy"><strong>Dark</strong><small>Charcoal and blue</small></span>
+                <span className="theme-option-copy"><strong>Dark</strong></span>
                 <span className="theme-radio" />
               </button>
               <button className={`theme-option ${theme === 'discord' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'discord'} tabIndex={theme === 'discord' ? 0 : -1} onKeyDown={(event) => handleRadioGroupKeyDown(event, themeValues, theme, setTheme)} onClick={() => setTheme('discord')}>
                 <span className="theme-preview theme-preview-discord"><i /><i /><i /><b /></span>
-                <span className="theme-option-copy"><strong>Discord</strong><small>Blurple dark workspace</small></span>
+                <span className="theme-option-copy"><strong>Discord</strong></span>
                 <span className="theme-radio" />
               </button>
             </div>
@@ -857,7 +862,6 @@ function App() {
               <output className="font-size-value" htmlFor="font-size-control">{fontSizePx} px</output>
             </div>
             <div className="font-size-range-labels" aria-hidden="true"><span>{MIN_FONT_SIZE_PX} px</span><span>{MAX_FONT_SIZE_PX} px</span></div>
-            <p className="font-size-help">Sets the base text size; other interface text scales proportionally.</p>
           </div>
           <div className="settings-section update-settings-section">
             <span className="field-label">Update channel</span>
@@ -872,11 +876,10 @@ function App() {
               </button>
             </div>
             <div className="update-check-row">
-              <span className={updateCheckError ? 'update-check-message is-error' : 'update-check-message'} role={updateCheckError ? 'alert' : 'status'}>{updateCheckError || (checkingUpdates ? 'Checking for updates…' : updateCheckMessage || 'Checks automatically at startup.')}</span>
+              <span className={updateCheckError ? 'update-check-message is-error' : 'update-check-message'} role={updateCheckError ? 'alert' : 'status'}>{updateCheckError || (checkingUpdates ? 'Checking for updates…' : updateCheckMessage || '')}</span>
               <button className="update-check-button" type="button" disabled={checkingUpdates || installingUpdate} onClick={() => setUpdateRefreshKey((key) => key + 1)}>{checkingUpdates ? 'Checking' : 'Check now'}</button>
             </div>
           </div>
-          <div className="dialog-note settings-note"><svg viewBox="0 0 18 18" fill="none"><path d="M9 2.2 3.2 4.5v4.1c0 3.3 2.5 5.9 5.8 7.2 3.3-1.3 5.8-3.9 5.8-7.2V4.5L9 2.2Z" /><path d="m6.4 8.8 1.7 1.7 3.6-3.7" /></svg><span>Appearance, font size, and update channel are saved automatically on this device.</span></div>
           <div className="dialog-actions"><button className="connect-button settings-done" type="button" onClick={() => setShowSettingsDialog(false)}>Done</button></div>
         </section>
       </div> : null}

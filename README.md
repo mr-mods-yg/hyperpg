@@ -16,6 +16,7 @@ The Windows installer sets up HyperPG for the current user, adds Start Menu and 
 
 - Browse database schemas, tables, columns, and rows, and edit table data with staged, transactional saves.
 - Page through table rows and choose how many rows to display.
+- Run SQL scripts against the selected database and inspect statement results.
 - Select multiple cells and copy them as CSV.
 - Add, duplicate, delete, restore, and revert rows and cells from the table context menu.
 - Resize the sidebar and collapse schema groups.
@@ -38,6 +39,10 @@ Choose **Stable** or **Nightly** in Settings. Stable releases use version tags o
 - Double-click a cell or press Enter/F2 to edit. Enter finishes editing, Shift+Enter inserts a line break, and Escape cancels the current cell edit. Generated columns are read-only.
 - **Save changes** (Ctrl/Cmd+S) applies the draft in one transaction. **Discard changes** restores the loaded page. Navigation asks how to handle an unsaved draft.
 - Right-click to add, duplicate, delete, restore, set NULL, or revert cells. New rows use PostgreSQL defaults for untouched cells.
+
+## Running SQL scripts
+
+Open a database and choose **New SQL script**. Type SQL, then select **Run script** or press Ctrl/Cmd+Enter. Select text to run only that portion. Results are shown for each statement, with the first 500 rows of each result displayed and available to copy as CSV. Include `COMMIT` when using an explicit transaction; an unfinished transaction is rolled back when execution ends.
 
 ## Build from source
 

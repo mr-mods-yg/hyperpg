@@ -2296,3 +2296,28 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 :root[data-theme="dark"] .table-nav-entry.is-current .table-nav-row { background: var(--control-hover); }
 :root[data-theme="dark"] .table-nav-entry.is-current .table-nav-item { color: var(--ink); }
 :root[data-theme="dark"] .table-nav-entry.is-current .table-grid-icon { color: var(--muted); }
+
+/* Compact, quiet controls keep the database content in focus. */
+.sidebar { border-right: 1px solid var(--line); }
+.app-brand { margin-bottom: 20px; }
+.sidebar-section-heading { color: var(--muted); letter-spacing: .045em; }
+.connection-wrap, .table-nav-row, .settings-button { transition: background-color .15s ease, color .15s ease; }
+.connection-wrap.is-active { background: var(--surface-raised); }
+.topbar { background: var(--paper); }
+.workspace-section { border-radius: 8px; }
+.view-switcher { border-radius: 7px; }
+.view-switcher button { border-radius: 5px; }
+.catalog-table { border-radius: 8px; }
+.modal-backdrop { background: rgba(12, 14, 20, .48); }
+.connection-dialog { box-shadow: 0 24px 80px rgba(0, 0, 0, .22), 0 2px 10px rgba(0, 0, 0, .08); }
+.settings-dialog { width: min(100%, 560px); }
+.settings-dialog .dialog-icon { display: none; }
+.settings-dialog .dialog-heading { margin-bottom: 24px; }
+.settings-dialog .settings-section > .field-label { margin-bottom: 10px; }
+.settings-dialog .theme-option { background: var(--input-surface); }
+.settings-dialog .theme-option:hover { background: var(--control-hover); }
+.settings-dialog .theme-option.is-selected { background: var(--accent-surface); }
+.settings-dialog .update-channel-options .theme-option { min-height: 54px; }
+.settings-dialog .dialog-actions { margin-top: 20px; }
+.welcome-content h1 + .welcome-cta { margin-top: 24px; }
+.reveal-url:disabled { opacity: .55; cursor: default; }

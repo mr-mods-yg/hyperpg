@@ -4,6 +4,14 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- Run SQL scripts or selections against the current database, inspect results, and copy them as CSV.
+
+### Changed
+
+- Refine the workspace and simplify settings and connection text.
+
 ## [1.0.8] - 2026-10-26
 
 ### Added
