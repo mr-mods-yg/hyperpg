@@ -13,6 +13,16 @@ export default function SqlEditor({ databaseId, databaseName, script, onScriptCh
   const [selection, setSelection] = useState({ start: 0, end: 0 })
   const [copyMessage, setCopyMessage] = useState('')
   const editorRef = useRef<HTMLTextAreaElement>(null)
+  const workspaceRef = useRef<HTMLElement>(null)
+  const [editorHeight, setEditorHeight] = useState<number | null>(null)
+  function resizeEditor(clientY: number) {
+    const editor = editorRef.current
+    const workspace = workspaceRef.current
+    if (!editor || !workspace) return
+    const top = editor.getBoundingClientRect().top
+    const max = Math.max(60, workspace.getBoundingClientRect().bottom - top - 100)
+    setEditorHeight(Math.max(60, Math.min(max, clientY - top)))
+  }
   const selected = selection.start !== selection.end
   const sqlToRun = selected ? script.slice(selection.start, selection.end) : script
 
@@ -46,14 +56,15 @@ export default function SqlEditor({ databaseId, databaseName, script, onScriptCh
     catch { setCopyMessage('Could not copy CSV') }
   }
 
-  return <section className="sql-workspace">
+  return <section className="sql-workspace" ref={workspaceRef}>
     <div className="sql-heading"><div><h1>SQL editor</h1><span>{databaseName}</span></div><div className="sql-actions">
       <button className="sql-button" type="button" disabled={running || !script} onClick={() => { onScriptChange(''); setSelection({ start: 0, end: 0 }); editorRef.current?.focus() }}>Clear</button>
       <button className="sql-button sql-run" type="button" onClick={() => void run()} disabled={running || !sqlToRun.trim()}>{running ? 'Running…' : selected ? 'Run selection' : 'Run script'}</button>
     </div></div>
-    <textarea ref={editorRef} className="sql-editor" aria-label="SQL script" spellCheck={false} value={script} onChange={(event) => { onScriptChange(event.target.value); setSelection({ start: event.target.selectionStart, end: event.target.selectionEnd }) }} onSelect={(event) => setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd })} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); void run() } }} placeholder="SELECT * FROM …" />
+    <textarea ref={editorRef} className="sql-editor" style={editorHeight === null ? undefined : { height: editorHeight }} aria-label="SQL script" spellCheck={false} value={script} onChange={(event) => { onScriptChange(event.target.value); setSelection({ start: event.target.selectionStart, end: event.target.selectionEnd }) }} onSelect={(event) => setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd })} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); void run() } }} placeholder="SELECT * FROM …" />
+    <div className="sql-divider" role="separator" aria-label="Resize script and results" aria-orientation="horizontal" tabIndex={0} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); resizeEditor(event.clientY) }} onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) resizeEditor(event.clientY) }} onKeyDown={(event) => { if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); const editor = editorRef.current; if (editor) resizeEditor(editor.getBoundingClientRect().bottom + (event.key === 'ArrowUp' ? -20 : 20)) } }} />
     <div className="sql-results" aria-live="polite">
-      <div className="sql-results-heading">Results <span>{elapsedMs !== null ? `${elapsedMs} ms · ` : ''}Ctrl / ⌘ + Enter runs selection or script</span></div>
+      <div className="sql-results-heading">Results <span>{elapsedMs !== null ? `${elapsedMs} ms` : ''}</span></div>
       {copyMessage ? <div className="sql-message" role="status">{copyMessage}</div> : null}
       {error || execution?.error ? <div className="notice notice-error" role="alert">{error || execution?.error}</div> : null}
       {execution?.rolledBack ? <div className="sql-message">An open transaction was rolled back. Include COMMIT to save it.</div> : null}
