@@ -63,7 +63,8 @@ test('resizes in place, reuses cached rows and appends the missing range', async
   await expect(grid(page).getByRole('rowheader')).toHaveCount(100)
   await expect(page.getByRole('button', { name: 'Add row' })).toBeDisabled()
   await expect(page.locator('.table-loading')).toHaveCount(0)
-  await expect(page.getByRole('progressbar', { name: 'Loading rows' })).toBeVisible()
+  await expect(page.locator('.table-status-activity')).toHaveText('Loading rows…')
+  await expect(page.getByRole('progressbar')).toHaveCount(0)
   expect(await page.evaluate(() => {
     const state = (window as any).pageSizeTest
     return { sameGrid: state.grid === document.querySelector('.data-grid-scroll'), sameRow: state.firstRow === document.querySelector('[data-cell="4:0"]'), scrollTop: state.grid.scrollTop, before: state.scrollTop, reads: state.reads }
@@ -71,7 +72,7 @@ test('resizes in place, reuses cached rows and appends the missing range', async
   await page.evaluate(() => (window as any).pageSizeTest.pending.shift().resolve())
   await expect(grid(page).getByRole('rowheader')).toHaveCount(250)
   await expect(grid(page)).toHaveAttribute('aria-busy', 'false')
-  await expect(page.getByRole('progressbar')).toHaveCount(0)
+  await expect(page.locator('.table-status-activity')).toHaveText('')
   await expect(row(page, 4)).toHaveAttribute('aria-selected', 'true')
   await expect(row(page, 249)).toHaveText('250')
   expect(await page.evaluate(() => {

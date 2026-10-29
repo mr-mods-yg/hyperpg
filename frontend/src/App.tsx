@@ -827,7 +827,6 @@ function App() {
                     ) : null}
                   </>}
                   <div className="table-statusbar">
-                    {tableActivity ? <div className="table-progress" role="progressbar" aria-label={tableActivity}><span /></div> : null}
                     <span className="table-status-metrics" title="Fetched rows on this page; size is the estimated UTF-8 JSON size of row values, excluding metadata and network overhead.">{tableData ? `${tableData.rows.length.toLocaleString()} ${tableData.rows.length === 1 ? 'row' : 'rows'} · ~${formatBytes(loadedBytes)}` : '—'}</span>
                     <span className="table-status-activity" role="status" aria-live="polite">{tableActivity ? `${tableActivity}…` : tableStale && tableError ? 'Refresh failed' : ''}</span>
                   </div>

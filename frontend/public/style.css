@@ -2153,13 +2153,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .workspace-section.has-selected-table .pagination-actions { margin-left: 0; }
 .page-size-control { gap: 8px; font-size: calc(10px * var(--font-scale, 1)); }
 .page-size-control select { height: 30px; border-color: var(--line); }
-.table-statusbar { position: relative; display: flex; min-height: 28px; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0 0; margin-top: auto; color: var(--muted); border-top: 1px solid var(--line); font-size: calc(10px * var(--font-scale, 1)); }
+.table-statusbar { display: flex; min-height: 28px; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0 0; margin-top: auto; color: var(--muted); border-top: 1px solid var(--line); font-size: calc(10px * var(--font-scale, 1)); }
 .table-status-metrics { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .table-status-activity { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.table-progress { position: absolute; top: -1px; right: 0; left: 0; height: 2px; overflow: hidden; background: var(--accent-surface); }
-.table-progress span { display: block; width: 35%; height: 100%; background: var(--accent); animation: table-progress 1.3s ease-in-out infinite; }
-@keyframes table-progress { from { transform: translateX(-110%); } to { transform: translateX(290%); } }
-@media (prefers-reduced-motion: reduce) { .table-progress span { transform: translateX(90%); animation: none; } }
 .grid-change-bar { gap: 10px; margin-bottom: 12px; padding: 9px 11px; border-radius: 7px; }
 .grid-change-bar .cancel-button, .grid-change-bar .connect-button { min-height: 30px; }
 .grid-cell-editor { font-size: calc(12px * var(--font-scale, 1)); line-height: 1.5; }

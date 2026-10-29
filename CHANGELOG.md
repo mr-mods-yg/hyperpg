@@ -8,12 +8,16 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 - Run SQL scripts or selections against the current database, inspect results, and copy them as CSV.
 - Insert staged rows above or below a selected cell, and see cell details in the context menu.
-- Show fetched row counts, estimated data sizes, and progress for loading, refreshing, and saving.
+- Show fetched row counts, estimated data sizes, and status for loading, refreshing, and saving.
 
 ### Changed
 
 - Refine the workspace and simplify settings and connection text.
 - Resize table pages in place, reusing loaded rows and preserving the current position.
+
+### Removed
+
+- Remove the table loading progress bar while retaining status text.
 
 ## [1.0.8] - 2026-10-26
 
