@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { PostgresService, UpdateService } from '../bindings/changeme'
 import DataGrid, { type DataGridHandle } from './DataGrid'
 import type { TableData } from './grid'
@@ -181,8 +181,13 @@ function App() {
     return () => { cancelled = true }
   }, [])
 
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    root.classList.add('theme-switching')
+    root.dataset.theme = theme
+    // Flush the new colors before restoring normal hover transitions.
+    void root.offsetHeight
+    root.classList.remove('theme-switching')
     try {
       localStorage.setItem('hyperpg-theme', theme)
     } catch {
