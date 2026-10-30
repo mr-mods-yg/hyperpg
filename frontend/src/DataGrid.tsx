@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type PointerEvent } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type PointerEvent } from 'react'
 import { PostgresService } from '../bindings/changeme'
 import { cellKey, cellRange, draftValue, editValue, selectionCSV, tableChanges, valueText, type CellPosition, type DraftRow, type RowEdits, type TableData } from './grid'
 import Icon from './Icon'
@@ -10,6 +10,9 @@ type Props = {
   schema: string
   table: string
   pageOffset: number
+  loading: boolean
+  readOnly: boolean
+  selectionVersion: number
   search: string
   onSearchChange: (search: string) => void
   onDirtyChange: (dirty: boolean) => void
@@ -18,10 +21,13 @@ type Props = {
 }
 type Editor = { row: DraftRow; column: number; text: string; touched: boolean }
 type ContextMenu = { x: number; y: number; cell: CellPosition | null }
+// Anchor insertions to a loaded row, so removing another draft cannot move them.
+type InsertedRow = { row: DraftRow; beforeRowId: string | null }
+type RowPlacement = { target: DraftRow; side: 'above' | 'below'; column: number }
 
-const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, connectionID, schema, table, pageOffset, search, onSearchChange, onDirtyChange, onSavingChange, onSaved }, ref) {
+const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, connectionID, schema, table, pageOffset, loading, readOnly, selectionVersion, search, onSearchChange, onDirtyChange, onSavingChange, onSaved }, ref) {
   const baseRows = useMemo<DraftRow[]>(() => data.rows.map((original, index) => ({ id: `row-${index}`, original, identity: data.identities[index] ?? null, added: false })), [data])
-  const [addedRows, setAddedRows] = useState<DraftRow[]>([])
+  const [addedRows, setAddedRows] = useState<InsertedRow[]>([])
   const [edits, setEdits] = useState<RowEdits>({})
   const [deleted, setDeleted] = useState<Set<string>>(new Set())
   const [selection, setSelection] = useState<Set<string>>(new Set())
@@ -38,7 +44,20 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
   const menuRef = useRef<HTMLDivElement>(null)
   const savingRef = useRef(false)
 
-  const rows = useMemo(() => [...baseRows, ...addedRows], [baseRows, addedRows])
+  const rows = useMemo(() => {
+    const baseIDs = new Set(baseRows.map((row) => row.id))
+    const insertions = new Map<string | null, DraftRow[]>()
+    for (const added of addedRows) {
+      const before = added.beforeRowId && baseIDs.has(added.beforeRowId) ? added.beforeRowId : null
+      const group = insertions.get(before) ?? []
+      group.push(added.row)
+      insertions.set(before, group)
+    }
+    const ordered: DraftRow[] = []
+    for (const row of baseRows) ordered.push(...(insertions.get(row.id) ?? []), row)
+    ordered.push(...(insertions.get(null) ?? []))
+    return ordered
+  }, [baseRows, addedRows])
   const visibleRows = useMemo(() => {
     const query = search.trim().toLowerCase()
     // Keep a row visible while editing it; new rows are always visible.
@@ -50,12 +69,31 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
   const selectedRows = [...new Set([...selection].map((key) => Number(key.split(':')[0])))].map((index) => visibleRows[index]).filter(Boolean)
   const menuRow = menu?.cell ? visibleRows[menu.cell.row] : null
   const menuColumn = menu?.cell ? data.columns[menu.cell.column] : null
+  const menuValue = menuRow && menuColumn && menu?.cell ? draftValue(menuRow, menuColumn, menu.cell.column, resolvedEdits) : undefined
+  const menuValueText = menuValue === undefined ? 'DEFAULT' : menuValue === null ? 'NULL' : valueText(menuValue) || 'Empty string'
+  const menuCellChanged = !!menuRow && !!menuColumn && Object.prototype.hasOwnProperty.call(resolvedEdits[menuRow.id] ?? {}, menuColumn.name)
 
   useEffect(() => { onDirtyChange(dirty) }, [dirty, onDirtyChange])
   useEffect(() => () => { onDirtyChange(false); onSavingChange(false) }, [onDirtyChange, onSavingChange])
   useEffect(() => {
     setSelection(new Set()); setActive(null); anchor.current = null
   }, [search])
+  useEffect(() => {
+    setSelection(new Set()); setActive(null); anchor.current = null; setMenu(null)
+  }, [selectionVersion])
+  useEffect(() => {
+    setSelection((current) => {
+      const retained = [...current].filter((key) => {
+        const [row, column] = key.split(':').map(Number)
+        return row < visibleRows.length && column < data.columns.length
+      })
+      return retained.length === current.size ? current : new Set(retained)
+    })
+    setActive((current) => current && (current.row >= visibleRows.length || current.column >= data.columns.length) ? null : current)
+    if (anchor.current && (anchor.current.row >= visibleRows.length || anchor.current.column >= data.columns.length)) anchor.current = null
+    setMenu((current) => current?.cell && (current.cell.row >= visibleRows.length || current.cell.column >= data.columns.length) ? null : current)
+  }, [visibleRows.length, data.columns.length])
+  useEffect(() => { if (loading) setMenu(null) }, [loading])
   useEffect(() => {
     const end = () => { dragging.current = null }
     window.addEventListener('pointerup', end)
@@ -68,20 +106,36 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
     window.addEventListener('beforeunload', beforeUnload)
     return () => window.removeEventListener('beforeunload', beforeUnload)
   }, [dirty])
+  useLayoutEffect(() => {
+    if (!menu || !menuRef.current) return
+    const element = menuRef.current
+    const bounds = element.getBoundingClientRect()
+    element.style.left = `${Math.max(8, Math.min(menu.x, window.innerWidth - bounds.width - 8))}px`
+    element.style.top = `${Math.max(8, Math.min(menu.y, window.innerHeight - bounds.height - 8))}px`
+    element.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true })
+  }, [menu])
   useEffect(() => {
     if (!menu) return
-    menuRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus()
     const close = (event: Event) => {
       if (!menuRef.current?.contains(event.target as Node)) setMenu(null)
     }
+    const grid = gridRef.current
+    const scroller = grid?.querySelector<HTMLElement>('.data-grid-scroll')
+    const scrollTop = scroller?.scrollTop
+    const scrollLeft = scroller?.scrollLeft
+    const closeOnScroll = (event: Event) => {
+      if (menuRef.current?.contains(event.target as Node)) return
+      // Ignore a queued scroll event from bringing the target cell into view.
+      if (event.target === scroller && scroller?.scrollTop === scrollTop && scroller?.scrollLeft === scrollLeft) return
+      setMenu(null)
+    }
     window.addEventListener('pointerdown', close)
     window.addEventListener('resize', close)
-    gridRef.current?.addEventListener('scroll', close, true)
-    const grid = gridRef.current
+    grid?.addEventListener('scroll', closeOnScroll, true)
     return () => {
       window.removeEventListener('pointerdown', close)
       window.removeEventListener('resize', close)
-      grid?.removeEventListener('scroll', close, true)
+      grid?.removeEventListener('scroll', closeOnScroll, true)
     }
   }, [menu])
 
@@ -102,7 +156,7 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
   }
 
   async function save(): Promise<boolean> {
-    if (savingRef.current) return false
+    if (savingRef.current || loading || readOnly) return false
     if (!changes.length) return true
     savingRef.current = true; setSaving(true); onSavingChange(true); setError(''); setMenu(null)
     commitEditor()
@@ -124,7 +178,7 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
   function beginEdit(position: CellPosition, initialText?: string) {
     const row = visibleRows[position.row]
     const column = data.columns[position.column]
-    if (!row || !column || column.generated || deleted.has(row.id) || saving) return
+    if (!row || !column || column.generated || deleted.has(row.id) || saving || loading || readOnly) return
     setMenu(null); setSelection(new Set([cellKey(position)])); setActive(position); anchor.current = position
     setEditor({ row, column: position.column, text: initialText ?? valueText(draftValue(row, column, position.column, edits)), touched: initialText !== undefined })
   }
@@ -180,8 +234,8 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
     if (active) focusCell(active)
   }
 
-  function addRow(duplicate?: DraftRow) {
-    if (saving) return
+  function addRow(duplicate?: DraftRow, placement?: RowPlacement) {
+    if (saving || loading || readOnly) return
     commitEditor()
     const row: DraftRow = { id: `new-${nextRowID.current++}`, original: [], identity: null, added: true }
     if (duplicate) {
@@ -193,8 +247,23 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
       })
       setEdits((current) => ({ ...current, [row.id]: values }))
     }
-    setAddedRows((current) => [...current, row]); setMenu(null); setError(''); setMessage('New row staged. Untouched cells use database defaults.')
-    const position = { row: visibleRows.length, column: Math.max(0, data.columns.findIndex((column) => !column.generated)) }
+    const targetIndex = placement ? rows.findIndex((item) => item.id === placement.target.id) : -1
+    const insertIndex = targetIndex < 0 ? rows.length : targetIndex + (placement?.side === 'below' ? 1 : 0)
+    const following = rows.slice(insertIndex)
+    const beforeRowId = following.find((item) => !item.added)?.id ?? null
+    const nextAddedId = following.find((item) => item.added)?.id
+    setAddedRows((current) => {
+      const index = nextAddedId ? current.findIndex((item) => item.row.id === nextAddedId) : -1
+      const insertion = index < 0 ? current.length : index
+      return [...current.slice(0, insertion), { row, beforeRowId }, ...current.slice(insertion)]
+    })
+    setMenu(null); setError('')
+    setMessage(placement ? 'Row staged. Its position may change after saving.' : 'New row staged. Untouched cells use database defaults.')
+    const visibleIndex = placement ? visibleRows.findIndex((item) => item.id === placement.target.id) : -1
+    const preferredColumn = placement?.column
+    const column = preferredColumn !== undefined && data.columns[preferredColumn] && !data.columns[preferredColumn].generated
+      ? preferredColumn : Math.max(0, data.columns.findIndex((item) => !item.generated))
+    const position = { row: visibleIndex < 0 ? visibleRows.length : visibleIndex + (placement?.side === 'below' ? 1 : 0), column }
     setSelection(new Set([cellKey(position)])); setActive(position); anchor.current = position
     requestAnimationFrame(() => {
       const cell = gridRef.current?.querySelector<HTMLElement>(`[data-cell="${cellKey(position)}"]`)
@@ -203,24 +272,26 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
   }
 
   function deleteRows() {
-    if (saving) return
+    if (saving || loading || readOnly) return
     commitEditor(); setMenu(null)
     const ids = new Set(selectedRows.map((row) => row.id))
-    setAddedRows((current) => current.filter((row) => !ids.has(row.id)))
+    const addedIDs = new Set(selectedRows.filter((row) => row.added).map((row) => row.id))
+    setAddedRows((current) => current.filter((item) => !ids.has(item.row.id)))
+    setEdits((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !addedIDs.has(id))))
     setDeleted((current) => new Set([...current, ...selectedRows.filter((row) => !row.added).map((row) => row.id)]))
     setSelection(new Set()); setActive(null); anchor.current = null
     setMessage(`${ids.size} ${ids.size === 1 ? 'row' : 'rows'} marked for deletion. Save to apply.`)
   }
 
   function openMenu(x: number, y: number, position: CellPosition | null, wholeRow = false) {
-    if (saving) return
+    if (saving || loading) return
     commitEditor()
     if (position && (wholeRow ? !selectedRows.includes(visibleRows[position.row]) : !selection.has(cellKey(position)))) {
       setSelection(wholeRow ? cellRange(position, { ...position, column: data.columns.length - 1 }) : new Set([cellKey(position)]))
       anchor.current = position
     }
     if (position) setActive(position)
-    setMenu({ x: Math.max(8, Math.min(x, window.innerWidth - 230)), y: Math.max(8, Math.min(y, window.innerHeight - 360)), cell: position })
+    setMenu({ x, y, cell: position })
   }
 
   function keyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -259,7 +330,7 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
 
   return <div className="editable-grid" ref={gridRef} onCopy={handleCopy} onKeyDown={keyDown}>
     <div className="grid-actions">
-      <button className="pagination-button" type="button" onClick={() => addRow()} disabled={saving || !data.columns.length}><Icon name="plus" />Add row</button>
+      <button className="pagination-button" type="button" onClick={() => addRow()} disabled={saving || loading || readOnly || !data.columns.length}><Icon name="plus" />Add row</button>
       <button className="pagination-button" type="button" onClick={() => void copySelection()} disabled={!selection.size || saving}><Icon name="copy" />Copy CSV</button>
       {selection.size ? <span className="grid-selection-count">{selection.size} selected</span> : null}
       <label className="row-search"><Icon name="search" /><input value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Search this page" aria-label="Search this page" /></label>
@@ -267,7 +338,7 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
     {dirty ? <div className="grid-change-bar" role="status">
       <span>{changes.length} unsaved {changes.length === 1 ? 'row change' : 'row changes'}</span>
       <button className="cancel-button" type="button" onClick={discard} disabled={saving}>Discard changes</button>
-      <button className="connect-button" type="button" onClick={() => void save()} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
+      <button className="connect-button" type="button" onClick={() => void save()} disabled={saving || loading || readOnly}>{saving ? 'Saving…' : 'Save changes'}</button>
     </div> : null}
     {error ? <div className="notice notice-error" role="alert">{error}</div> : null}
     <div className="data-grid-wrap" onContextMenu={(event) => {
@@ -276,7 +347,7 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
       if (!(event.target as HTMLElement).closest('[data-cell], .row-index')) openMenu(event.clientX, event.clientY, null)
     }}>
       <div className="data-grid-scroll">
-        <table className="data-grid selectable-grid" role="grid" aria-label={`${schema}.${table} data`} aria-multiselectable="true" aria-busy={saving}>
+        <table className="data-grid selectable-grid" role="grid" aria-label={`${schema}.${table} data`} aria-multiselectable="true" aria-busy={saving || loading}>
           <thead><tr role="row"><th className="row-index-heading" role="columnheader">#</th>{data.columns.map((column) => <th key={column.name} role="columnheader"><span className="column-name">{column.name}{column.generated ? <Icon name="lock" className="column-lock" /> : null}</span><small>{column.dataType}</small></th>)}</tr></thead>
           <tbody>{visibleRows.map((row, rowIndex) => <tr key={row.id} role="row" className={`${row.added ? 'is-added' : ''} ${deleted.has(row.id) ? 'is-deleted' : ''}`}>
             <td className="row-index" role="rowheader" onPointerDown={(event) => {
@@ -302,13 +373,13 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
               ].join(' ') : ''
               const editing = editor?.row.id === row.id && editor.column === columnIndex
               const changed = Object.prototype.hasOwnProperty.call(edits[row.id] ?? {}, column.name)
-              return <td key={column.name} role="gridcell" data-cell={key} aria-selected={selected} aria-readonly={column.generated || deleted.has(row.id)} tabIndex={active ? cellKey(active) === key ? 0 : -1 : rowIndex === 0 && columnIndex === 0 ? 0 : -1}
+              return <td key={column.name} role="gridcell" data-cell={key} aria-selected={selected} aria-readonly={readOnly || column.generated || deleted.has(row.id)} tabIndex={active ? cellKey(active) === key ? 0 : -1 : rowIndex === 0 && columnIndex === 0 ? 0 : -1}
                 className={`${selected ? 'is-selected' : ''} ${selectionEdges} ${active && cellKey(active) === key ? 'is-active' : ''} ${changed ? 'is-changed' : ''} ${editing ? 'is-editing' : ''}`}
                 aria-label={`Row ${rowIndex + 1}, ${column.name}: ${value === undefined ? 'DEFAULT' : value === null ? 'NULL' : valueText(value)}`}
                 onFocus={() => { if (!active) { setActive(position); setSelection(new Set([key])); anchor.current = position } }}
                 onPointerDown={(event) => selectCell(event, position)} onPointerEnter={(event) => extendDrag(event, position)} onDoubleClick={() => beginEdit(position)}
                 onContextMenu={(event) => { if (editing) return; event.preventDefault(); openMenu(event.clientX, event.clientY, position) }}>
-                {editing ? <textarea className="grid-cell-editor" aria-label={`Edit ${column.name}`} value={editor.text} autoFocus disabled={saving} onFocus={(event) => event.currentTarget.select()}
+                {editing ? <textarea className="grid-cell-editor" aria-label={`Edit ${column.name}`} value={editor.text} autoFocus disabled={saving || loading || readOnly} onFocus={(event) => event.currentTarget.select()}
                   onChange={(event) => setEditor({ ...editor, text: event.target.value, touched: true })} onBlur={commitEditor} onKeyDown={(event) => {
                     event.stopPropagation()
                     if (event.key === 'Escape') { event.preventDefault(); setEditor(null); focusCell(position) }
@@ -329,32 +400,49 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
     <div className="grid-feedback" role="status" aria-live="polite" title={message || undefined}>{message}</div>
     {menu ? <div className="grid-context-menu" role="menu" aria-label="Cell actions" ref={menuRef} style={{ left: menu.x, top: menu.y }} onKeyDown={(event) => {
       if (event.key === 'Escape') { event.preventDefault(); setMenu(null); if (active) focusCell(active) }
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End') {
         event.preventDefault()
         const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
         const index = buttons.indexOf(document.activeElement as HTMLButtonElement)
-        buttons[(index + (event.key === 'ArrowDown' ? 1 : buttons.length - 1)) % buttons.length]?.focus()
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
+          : (index + (event.key === 'ArrowDown' ? 1 : buttons.length - 1)) % buttons.length
+        buttons[next]?.focus()
       }
       if (event.key === 'Tab') setMenu(null)
     }}>
-      <button type="button" role="menuitem" disabled={!selection.size} onClick={() => void copySelection()}>Copy selection as CSV</button>
-      <button type="button" role="menuitem" disabled={!menu.cell || menuColumn?.generated || !!menuRow && deleted.has(menuRow.id)} onClick={() => menu.cell && beginEdit(menu.cell)}>Edit cell</button>
-      <button type="button" role="menuitem" disabled={!menuRow || !menuColumn?.nullable || menuColumn.generated || deleted.has(menuRow.id)} onClick={() => {
+      {menuRow && menuColumn ? <div className="grid-menu-details" role="presentation">
+        <div className="grid-menu-cell-heading"><strong title={menuColumn.name}>{menuColumn.name}</strong><span title={menuColumn.dataType}>{menuColumn.dataType}</span></div>
+        <div className="grid-menu-cell-meta">
+          <span>{menuRow.added ? 'New row' : `Row ${pageOffset + Number(menuRow.id.slice(4)) + 1}`}</span>
+          <span>{menuColumn.nullable ? 'Nullable' : 'Not null'}</span>
+          {menuColumn.generated ? <span>Generated</span> : null}
+          {deleted.has(menuRow.id) ? <span>Deleted</span> : menuCellChanged ? <span>Edited</span> : null}
+          {selection.size > 1 ? <span>{selection.size} cells selected</span> : null}
+        </div>
+        <div className={`grid-menu-cell-value ${menuValue === null || menuValue === undefined || menuValue === '' ? 'is-placeholder' : ''}`} title={menuValueText}>{menuValueText}</div>
+      </div> : null}
+      <button type="button" role="menuitem" disabled={readOnly || !menuRow || !menuColumn || menuColumn.generated || deleted.has(menuRow.id)} onClick={() => menu.cell && beginEdit(menu.cell)}><Icon name="edit" /><span>Edit cell</span></button>
+      <button type="button" role="menuitem" disabled={!selection.size} onClick={() => void copySelection()}><Icon name="copy" /><span>Copy selection as CSV</span></button>
+      <button type="button" role="menuitem" disabled={readOnly || !menuRow || !menuColumn?.nullable || menuColumn.generated || deleted.has(menuRow.id)} onClick={() => {
         if (menuRow && menuColumn && menu.cell) setEdits((current) => editValue(current, menuRow, menuColumn, menu.cell!.column, null))
         setMenu(null)
-      }}>Set NULL</button>
-      <button type="button" role="menuitem" disabled={!menuRow || !menuColumn || !Object.prototype.hasOwnProperty.call(edits[menuRow.id] ?? {}, menuColumn.name)} onClick={() => {
+      }}><Icon name="null" /><span>Set NULL</span></button>
+      <button type="button" role="menuitem" disabled={readOnly || !menuRow || !menuColumn || !Object.prototype.hasOwnProperty.call(edits[menuRow.id] ?? {}, menuColumn.name)} onClick={() => {
         if (menuRow && menuColumn && menu.cell) setEdits((current) => editValue(current, menuRow, menuColumn, menu.cell!.column, undefined))
         setMenu(null)
-      }}>{menuRow?.added ? 'Use default' : 'Revert cell'}</button>
+      }}><Icon name="undo" /><span>{menuRow?.added ? 'Use default' : 'Revert cell'}</span></button>
       <hr />
-      <button type="button" role="menuitem" onClick={() => addRow()}>Add row</button>
-      <button type="button" role="menuitem" disabled={!menuRow || deleted.has(menuRow.id)} onClick={() => menuRow && addRow(menuRow)}>Duplicate row</button>
-      <button type="button" role="menuitem" disabled={!selectedRows.length} className="danger-action" onClick={deleteRows}>Delete {selectedRows.length > 1 ? `${selectedRows.length} rows` : 'row'}</button>
-      <button type="button" role="menuitem" disabled={!selectedRows.some((row) => deleted.has(row.id))} onClick={() => {
+      {menuRow && menu.cell ? <>
+        <button type="button" role="menuitem" disabled={readOnly} onClick={() => addRow(undefined, { target: menuRow, side: 'above', column: menu.cell!.column })}><Icon name="row-above" /><span>Add row above</span></button>
+        <button type="button" role="menuitem" disabled={readOnly} onClick={() => addRow(undefined, { target: menuRow, side: 'below', column: menu.cell!.column })}><Icon name="row-below" /><span>Add row below</span></button>
+      </> : <button type="button" role="menuitem" disabled={readOnly} onClick={() => addRow()}><Icon name="plus" /><span>Add row</span></button>}
+      <button type="button" role="menuitem" disabled={readOnly || !menuRow || deleted.has(menuRow.id)} onClick={() => menuRow && addRow(menuRow)}><Icon name="duplicate" /><span>Duplicate row</span></button>
+      <hr />
+      <button type="button" role="menuitem" disabled={readOnly || !selectedRows.length} className="danger-action" onClick={deleteRows}><Icon name="trash" /><span>Delete {selectedRows.length > 1 ? `${selectedRows.length} rows` : 'row'}</span></button>
+      <button type="button" role="menuitem" disabled={readOnly || !selectedRows.some((row) => deleted.has(row.id))} onClick={() => {
         const ids = new Set(selectedRows.map((row) => row.id))
         setDeleted((current) => new Set([...current].filter((id) => !ids.has(id)))); setMenu(null)
-      }}>Restore deleted rows</button>
+      }}><Icon name="restore" /><span>Restore deleted rows</span></button>
     </div> : null}
   </div>
 })

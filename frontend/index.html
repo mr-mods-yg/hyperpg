@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/hyperpg.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <script>
+      try {
+        const theme = localStorage.getItem('hyperpg-theme')
+        if (['light', 'cream', 'dark', 'discord'].includes(theme)) document.documentElement.dataset.theme = theme
+      } catch { /* Use the default theme when storage is unavailable. */ }
+    </script>
     <link rel="stylesheet" href="/style.css" />
     <meta name="theme-color" content="#1c262b" />
     <title>hyperpg — PostgreSQL explorer</title>

@@ -22,6 +22,8 @@
 
 * { box-sizing: border-box; }
 
+.theme-switching *, .theme-switching *::before, .theme-switching *::after { transition: none !important; }
+
 html, body, #root { width: 100%; height: 100%; min-width: 0; margin: 0; }
 body { overflow: hidden; background: var(--paper); color: var(--ink); }
 button, input { font: inherit; }
@@ -2127,6 +2129,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .view-switcher button { height: 23px; padding-inline: 12px; font-weight: 500; }
 .view-switcher button.is-selected { box-shadow: var(--control-shadow); }
 .workspace-tabs .workspace-refresh { display: grid; flex-shrink: 0; width: 30px; height: 30px; place-items: center; padding: 0; border-color: var(--line); }
+.workspace-tabs .workspace-refresh:disabled { opacity: .5; cursor: default; }
+.workspace-tabs .workspace-refresh:disabled:hover { color: var(--muted); background: transparent; }
 .table-workspace { padding: 0 0 16px; }
 
 .grid-actions { flex: 0 0 auto; min-height: 58px; gap: 8px; padding-block: 12px; }
@@ -2151,12 +2155,31 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .workspace-section.has-selected-table .pagination-actions { margin-left: 0; }
 .page-size-control { gap: 8px; font-size: calc(10px * var(--font-scale, 1)); }
 .page-size-control select { height: 30px; border-color: var(--line); }
+.table-statusbar { display: flex; min-height: 28px; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0 0; margin-top: auto; color: var(--muted); border-top: 1px solid var(--line); font-size: calc(10px * var(--font-scale, 1)); }
+.table-status-metrics { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.table-status-activity { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .grid-change-bar { gap: 10px; margin-bottom: 12px; padding: 9px 11px; border-radius: 7px; }
 .grid-change-bar .cancel-button, .grid-change-bar .connect-button { min-height: 30px; }
 .grid-cell-editor { font-size: calc(12px * var(--font-scale, 1)); line-height: 1.5; }
 .empty-table { min-height: 180px; padding: 24px; font-size: calc(12px * var(--font-scale, 1)); line-height: 1.6; text-align: center; }
-.grid-context-menu { padding: 5px; border-color: var(--line); border-radius: 9px; }
-.grid-context-menu button { min-height: 32px; padding-inline: 10px; border-radius: 5px; }
+.grid-context-menu { width: 240px; max-width: calc(100vw - 16px); padding: 6px; border-color: var(--line-strong); border-radius: 10px; }
+.grid-menu-details { display: grid; gap: 6px; min-width: 0; padding: 7px 9px 10px; margin-bottom: 5px; border-bottom: 1px solid var(--line); }
+.grid-menu-cell-heading { display: flex; min-width: 0; align-items: baseline; gap: 8px; }
+.grid-menu-cell-heading strong, .grid-menu-cell-heading span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grid-menu-cell-heading strong { min-width: 0; color: var(--ink); font-size: calc(12px * var(--font-scale, 1)); }
+.grid-menu-cell-heading span { flex: 0 1 auto; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: calc(10px * var(--font-scale, 1)); }
+.grid-menu-cell-meta { display: flex; flex-wrap: wrap; gap: 2px 0; color: var(--muted); font-size: calc(10px * var(--font-scale, 1)); }
+.grid-menu-cell-meta span + span::before { padding: 0 5px; color: var(--quiet); content: '·'; }
+.grid-menu-cell-value { min-width: 0; overflow: hidden; color: var(--ink); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: calc(11px * var(--font-scale, 1)); text-overflow: ellipsis; white-space: pre; }
+.grid-menu-cell-value.is-placeholder { color: var(--muted); font-style: italic; }
+.grid-context-menu button { display: flex; min-height: 34px; align-items: center; gap: 10px; padding: 7px 9px; border-radius: 6px; font-size: calc(11px * var(--font-scale, 1)); }
+.grid-context-menu button .ui-icon { color: var(--muted); }
+.grid-context-menu button:hover:not(:disabled), .grid-context-menu button:focus-visible { background: var(--control-hover); }
+.grid-context-menu button:focus-visible { box-shadow: inset 0 0 0 1px var(--focus-ring); }
+.grid-context-menu button:hover:not(:disabled) .ui-icon, .grid-context-menu button:focus-visible .ui-icon { color: inherit; }
+.grid-context-menu .danger-action .ui-icon { color: var(--danger); }
+.grid-context-menu .danger-action:hover:not(:disabled), .grid-context-menu .danger-action:focus-visible { background: var(--danger-pale); }
+.grid-context-menu hr { margin: 5px 2px; width: auto; }
 .structure-intro { min-height: 52px; margin: 0; }
 .structure-intro h3 { color: var(--ink); font-weight: 550; }
 .structure-table-wrap { border: 0; border-top: 1px solid var(--line); border-radius: 0; background: var(--white); }
@@ -2296,3 +2319,28 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 :root[data-theme="dark"] .table-nav-entry.is-current .table-nav-row { background: var(--control-hover); }
 :root[data-theme="dark"] .table-nav-entry.is-current .table-nav-item { color: var(--ink); }
 :root[data-theme="dark"] .table-nav-entry.is-current .table-grid-icon { color: var(--muted); }
+
+/* Compact, quiet controls keep the database content in focus. */
+.sidebar { border-right: 1px solid var(--line); }
+.app-brand { margin-bottom: 20px; }
+.sidebar-section-heading { color: var(--muted); letter-spacing: .045em; }
+.connection-wrap, .table-nav-row, .settings-button { transition: background-color .15s ease, color .15s ease; }
+.connection-wrap.is-active { background: var(--surface-raised); }
+.topbar { background: var(--paper); }
+.workspace-section { border-radius: 8px; }
+.view-switcher { border-radius: 7px; }
+.view-switcher button { border-radius: 5px; }
+.catalog-table { border-radius: 8px; }
+.modal-backdrop { background: rgba(12, 14, 20, .48); }
+.connection-dialog { box-shadow: 0 24px 80px rgba(0, 0, 0, .22), 0 2px 10px rgba(0, 0, 0, .08); }
+.settings-dialog { width: min(100%, 560px); }
+.settings-dialog .dialog-icon { display: none; }
+.settings-dialog .dialog-heading { margin-bottom: 24px; }
+.settings-dialog .settings-section > .field-label { margin-bottom: 10px; }
+.settings-dialog .theme-option { background: var(--input-surface); }
+.settings-dialog .theme-option:hover { background: var(--control-hover); }
+.settings-dialog .theme-option.is-selected { background: var(--accent-surface); }
+.settings-dialog .update-channel-options .theme-option { min-height: 54px; }
+.settings-dialog .dialog-actions { margin-top: 20px; }
+.welcome-content h1 + .welcome-cta { margin-top: 24px; }
+.reveal-url:disabled { opacity: .55; cursor: default; }

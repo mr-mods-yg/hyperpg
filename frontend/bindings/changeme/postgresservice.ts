@@ -94,3 +94,8 @@ export function SaveTableChanges(connectionID: string, schema: string, tableName
 export function UpdateSavedConnection(connectionID: string, databaseURL: string, displayName: string, showAllDatabases: boolean): $CancellablePromise<$models.ConnectionInfo> {
     return $Call.ByID(2215518718, connectionID, databaseURL, displayName, showAllDatabases);
 }
+
+/** Execute a SQL script against an open database. */
+export function ExecuteSQLScript(connectionID: string, script: string): $CancellablePromise<{ results: { columns: string[]; rows: (string | null)[][]; command: string; truncated: boolean }[]; error: string; rolledBack: boolean }> {
+    return $Call.ByName("main.PostgresService.ExecuteSQLScript", connectionID, script);
+}
