@@ -4,6 +4,8 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-10-30
+
 ### Added
 
 - Run SQL scripts or selections against the current database, inspect results, and copy them as CSV.
@@ -14,6 +16,11 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 - Refine the workspace and simplify settings and connection text.
 - Resize table pages in place, reusing loaded rows and preserving the current position.
+- Resize the SQL editor and results panels to focus on query output.
+
+### Fixed
+
+- Apply theme changes consistently and prevent a flash of the default theme at startup.
 
 ### Removed
 
