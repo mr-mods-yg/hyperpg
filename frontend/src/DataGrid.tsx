@@ -1,7 +1,9 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type PointerEvent } from 'react'
-import { PostgresService } from '../bindings/changeme'
+import { PostgresService } from './services'
 import { cellKey, cellRange, draftValue, editValue, selectionCSV, tableChanges, valueText, type CellPosition, type DraftRow, type RowEdits, type TableData } from './grid'
 import Icon from './Icon'
+import ExportMenu from './ExportMenu'
+import { emptyTableQuery, type TableQueryOptions } from './table-query'
 
 export type DataGridHandle = { save: () => Promise<boolean>; discard: () => void }
 type Props = {
@@ -18,6 +20,8 @@ type Props = {
   onDirtyChange: (dirty: boolean) => void
   onSavingChange: (saving: boolean) => void
   onSaved: (rowCountDelta: number) => void
+  queryOptions?: TableQueryOptions
+  onSort?: (column: string) => void
 }
 type Editor = { row: DraftRow; column: number; text: string; touched: boolean }
 type ContextMenu = { x: number; y: number; cell: CellPosition | null }
@@ -25,7 +29,7 @@ type ContextMenu = { x: number; y: number; cell: CellPosition | null }
 type InsertedRow = { row: DraftRow; beforeRowId: string | null }
 type RowPlacement = { target: DraftRow; side: 'above' | 'below'; column: number }
 
-const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, connectionID, schema, table, pageOffset, loading, readOnly, selectionVersion, search, onSearchChange, onDirtyChange, onSavingChange, onSaved }, ref) {
+const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, connectionID, schema, table, pageOffset, loading, readOnly, selectionVersion, search, onSearchChange, onDirtyChange, onSavingChange, onSaved, queryOptions = emptyTableQuery(), onSort }, ref) {
   const baseRows = useMemo<DraftRow[]>(() => data.rows.map((original, index) => ({ id: `row-${index}`, original, identity: data.identities[index] ?? null, added: false })), [data])
   const [addedRows, setAddedRows] = useState<InsertedRow[]>([])
   const [edits, setEdits] = useState<RowEdits>({})
@@ -331,6 +335,7 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
     <div className="grid-actions">
       <button className="pagination-button" type="button" onClick={() => addRow()} disabled={saving || loading || readOnly || !data.columns.length}><Icon name="plus" />Add row</button>
       <button className="pagination-button" type="button" onClick={() => void copySelection()} disabled={!selection.size || saving}><Icon name="copy" />Copy CSV</button>
+      <ExportMenu generatedColumns={data.columns.filter((column) => column.generated && !column.identityGeneration).map((column) => column.name)} columns={data.columns.map((column) => column.name)} rows={visibleRows.map((row) => data.columns.map((column, index) => draftValue(row, column, index, resolvedEdits)))} selectedRows={selectedRows.map((row) => data.columns.map((column, index) => draftValue(row, column, index, resolvedEdits)))} table={{ databaseId: connectionID, schema, name: table, options: queryOptions }} fileName={table} />
       {selection.size ? <span className="grid-selection-count">{selection.size} selected</span> : null}
       <label className="row-search"><Icon name="search" /><input value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Search this page" aria-label="Search this page" /></label>
     </div>
@@ -347,7 +352,7 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
     }}>
       <div className="data-grid-scroll">
         <table className="data-grid selectable-grid" role="grid" aria-label={`${schema}.${table} data`} aria-multiselectable="true" aria-busy={saving || loading}>
-          <thead><tr role="row"><th className="row-index-heading" role="columnheader">#</th>{data.columns.map((column) => <th key={column.name} role="columnheader"><span className="column-name">{column.name}{column.generated ? <Icon name="lock" className="column-lock" /> : null}</span><small>{column.dataType}</small></th>)}</tr></thead>
+          <thead><tr role="row"><th className="row-index-heading" role="columnheader">#</th>{data.columns.map((column) => <th key={column.name} role="columnheader" aria-sort={queryOptions.sort[0]?.column === column.name ? queryOptions.sort[0].direction.toUpperCase() === 'ASC' ? 'ascending' : 'descending' : 'none'}><span className="column-name">{onSort ? <button type="button" className="column-sort" disabled={loading || saving || readOnly} onClick={() => onSort(column.name)} aria-label={`Sort by ${column.name}`}>{column.name}{queryOptions.sort[0]?.column === column.name ? queryOptions.sort[0].direction.toUpperCase() === 'ASC' ? ' ↑' : ' ↓' : ''}</button> : column.name}{column.generated ? <Icon name="lock" className="column-lock" /> : null}</span><small>{column.dataType}</small></th>)}</tr></thead>
           <tbody>{visibleRows.map((row, rowIndex) => <tr key={row.id} role="row" className={`${row.added ? 'is-added' : ''} ${deleted.has(row.id) ? 'is-deleted' : ''}`}>
             <td className="row-index" role="rowheader" onPointerDown={(event) => {
               if (event.button !== 0 || saving) return

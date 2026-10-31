@@ -2,8 +2,10 @@ package main
 
 import (
 	"embed"
-
 	"log"
+
+	"changeme/internal/database"
+	"changeme/internal/updates"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -19,13 +21,16 @@ var assets embed.FS
 //go:embed build/appicon.png
 var appIcon []byte
 
+//go:embed VERSION
+var appVersion string
+
 // main function serves as the application's entry point.
 func main() {
-	postgresService, err := NewPostgresService()
+	postgresService, err := database.NewPostgresService()
 	if err != nil {
 		log.Fatal(err)
 	}
-	updateService := NewUpdateService()
+	updateService := updates.NewUpdateService(appVersion)
 
 	// Create a new Wails application by providing the necessary options.
 	// Variables 'Name' and 'Description' are for application metadata.
@@ -47,7 +52,7 @@ func main() {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 	})
-	updateService.setApp(app)
+	updates.AttachApp(updateService, app)
 
 	// Create a new window with the necessary options.
 	// 'Title' is the title of the window.

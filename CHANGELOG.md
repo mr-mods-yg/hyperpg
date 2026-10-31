@@ -6,6 +6,12 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ### Added
 
+- SQL highlighting, schema autocomplete, formatting, and current-statement execution.
+- Saved SQL files, restored workspaces and drafts, and searchable query history.
+- Database-side table filters and column sorting.
+- CSV, JSON, and SQL file exports, including streaming exports of full filtered tables.
+- Constraints, indexes, table DDL, and SQL templates.
+
 - Table and SQL script tabs with separate drafts and results.
 - Full-screen settings with appearance, shortcut, and update categories.
 - Configurable action shortcuts, with F5 for refresh and Ctrl+W for closing tabs.

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
-import { PostgresService } from '../bindings/changeme'
+import { PostgresService } from './services'
 
 export type ConnectionInfo = {
   id: string

@@ -64,8 +64,8 @@ const tables = (page: Page, name = 'app', schema = 'public') => schemas(page, na
 const state = (page: Page) => page.evaluate(() => (window as any).connectionTestState)
 
 test.beforeEach(async ({ page }) => {
-  await page.route('**/bindings/changeme/postgresservice.*', route => route.fulfill({ contentType: 'text/javascript', body: postgresFixture }))
-  await page.route('**/bindings/changeme/updateservice.*', route => route.fulfill({ contentType: 'text/javascript', body: 'export async function CheckForUpdates() { return { available: false, version: "dev", releaseUrl: "" } }; export async function InstallUpdate() {}' }))
+  await page.route('**/bindings/changeme/internal/database/postgresservice.*', route => route.fulfill({ contentType: 'text/javascript', body: postgresFixture }))
+  await page.route('**/bindings/changeme/internal/updates/updateservice.*', route => route.fulfill({ contentType: 'text/javascript', body: 'export async function CheckForUpdates() { return { available: false, version: "dev", releaseUrl: "" } }; export async function InstallUpdate() {}' }))
   await page.goto('/')
   await expect(tables(page).getByRole('button', { name: 'Open items table', exact: true })).toBeVisible()
 })
@@ -244,7 +244,7 @@ test('delete from the context menu removes the branch and opens the next saved c
 
 test('a late connection open cannot replace a newly created script', async ({ page }) => {
   const delayed = postgresFixture.replace('export async function OpenSavedConnection(id) {', "export async function OpenSavedConnection(id) { if (id === 'reporting') await new Promise(resolve => { window.finishOpen = resolve });")
-  await page.route('**/bindings/changeme/postgresservice.*', route => route.fulfill({ contentType: 'text/javascript', body: delayed }))
+  await page.route('**/bindings/changeme/internal/database/postgresservice.*', route => route.fulfill({ contentType: 'text/javascript', body: delayed }))
   await page.reload()
   await expect(connections(page).getByRole('button', { name: 'Select Development', exact: true })).toHaveAttribute('aria-expanded', 'true')
   await connections(page).getByRole('button', { name: 'Select Reporting', exact: true }).click()
@@ -253,6 +253,23 @@ test('a late connection open cannot replace a newly created script', async ({ pa
   await page.getByRole('textbox', { name: 'SQL script' }).fill('SELECT 1;')
   await page.evaluate(() => (window as any).finishOpen())
   await expect(page.getByRole('tab', { name: 'Script 1', exact: true })).toHaveAttribute('aria-selected', 'true')
-  await expect(page.getByRole('textbox', { name: 'SQL script' })).toHaveValue('SELECT 1;')
+  await expect(page.getByRole('textbox', { name: 'SQL script' })).toHaveText('SELECT 1;')
   await expect(page.locator('.breadcrumbs')).toContainText('Development')
+})
+
+test('starting a table draft cancels an older connection-open request', async ({ page }) => {
+  const delayed = postgresFixture.replace('export async function OpenSavedConnection(id) {', "export async function OpenSavedConnection(id) { if (id === 'reporting') { await new Promise(resolve => { window.finishOpen = resolve }); window.openFinished = true; }")
+  await page.route('**/bindings/changeme/internal/database/postgresservice.*', route => route.fulfill({ contentType:'text/javascript', body:delayed }))
+  await page.reload()
+  await tables(page).getByRole('button', {name:'Open items table',exact:true}).click()
+  await expect(page.getByRole('gridcell')).toHaveText('primary/items')
+  await connections(page).getByRole('button', {name:'Select Reporting',exact:true}).click()
+  await expect.poll(() => page.evaluate(() => typeof (window as any).finishOpen)).toBe('function')
+  await page.getByRole('gridcell').dblclick()
+  await page.getByRole('textbox', {name:'Edit value',exact:true}).fill('draft')
+  await page.keyboard.press('Enter')
+  await page.evaluate(() => (window as any).finishOpen())
+  await expect.poll(() => page.evaluate(() => (window as any).openFinished)).toBe(true)
+  await expect(page.getByRole('gridcell')).toHaveText('draft')
+  await expect(page.getByRole('tab', {name:'items',exact:true})).toHaveAttribute('aria-selected','true')
 })

@@ -1,4 +1,4 @@
-.sql-workspace { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 24px; gap: 14px; }
+.sql-workspace { position: relative; isolation: isolate; display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 24px; gap: 14px; }
 .sql-heading, .sql-actions, .sql-result-meta, .sql-results-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .sql-heading h1 { margin: 0 0 4px; font-size: 18px; }
 .sql-heading span, .sql-results-heading span, .sql-result-meta span, .sql-message { color: var(--muted); }
@@ -36,7 +36,22 @@
 .sql-divider:hover, .sql-divider:focus-visible { background: transparent; }
 .sql-divider:hover::after, .sql-divider:focus-visible::after { background: var(--accent); }
 .sql-heading { flex: none; }
-.sql-heading[hidden], .sql-divider[hidden] { display: none; }
+.sql-source { display: contents; }
+.sql-results.is-expanded { position: absolute; inset: 24px; z-index: 1; padding: 16px; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: 0 8px 32px rgba(0, 0, 0, .12); }
+.sql-results.is-expanded .sql-results-heading { position: sticky; top: -16px; z-index: 1; background: var(--paper); padding-top: 4px; }
 .sql-focus-button { width: 28px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 5px; background: var(--white); color: var(--ink); cursor: pointer; font-size: 18px; }
 .sql-focus-button:hover { background: var(--control-hover); }
 .editor-tab-close:disabled { opacity: .35; cursor: default; }
+.sql-editor { padding: 0; overflow: hidden; }
+.sql-editor:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-halo); }
+.sql-editor .cm-editor { height: 100%; color: var(--ink); }
+.sql-editor .cm-editor.cm-focused { outline: none; }
+.sql-editor .cm-scroller { overflow: auto; font: 13px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.sql-editor .cm-content { padding: 12px 0; }
+.sql-editor .cm-gutters { background: var(--input-surface); color: var(--muted); border-right: 1px solid var(--line); }
+.sql-editor .cm-activeLine, .sql-editor .cm-activeLineGutter { background: var(--control-hover); }
+.sql-editor .cm-tooltip { color: var(--ink); background: var(--white); border-color: var(--line-strong); }
+.sql-editor .cm-tooltip-autocomplete > ul > li[aria-selected] { background: var(--accent); color: white; }
+
+.sql-editor { --sql-keyword: #6343a7; --sql-string: #18714a; --sql-number: #a14b25; }
+:root[data-theme="dark"] .sql-editor, :root[data-theme="discord"] .sql-editor { --sql-keyword: #c6a8ff; --sql-string: #8cdbac; --sql-number: #ffb286; }

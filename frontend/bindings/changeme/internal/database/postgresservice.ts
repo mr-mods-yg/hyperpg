@@ -15,53 +15,90 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 // @ts-ignore: Unused imports
 import * as $models from "./models.js";
 
+export function ChooseExportPath(defaultName: string): $CancellablePromise<string> {
+    return $Call.ByID(2914928631, defaultName);
+}
+
 /**
  * CloseConnection releases a connection and removes it from the active list.
  */
 export function CloseConnection(connectionID: string): $CancellablePromise<void> {
-    return $Call.ByID(2851324614, connectionID);
+    return $Call.ByID(1305819569, connectionID);
 }
 
 /**
  * Connect opens and verifies a PostgreSQL URL, then saves it securely on this device.
  */
 export function Connect(databaseURL: string, displayName: string, showAllDatabases: boolean): $CancellablePromise<$models.ConnectionInfo> {
-    return $Call.ByID(292084820, databaseURL, displayName, showAllDatabases);
+    return $Call.ByID(796809483, databaseURL, displayName, showAllDatabases);
 }
 
 /**
  * DeleteSavedConnection removes a saved record and closes its live connection.
  */
 export function DeleteSavedConnection(connectionID: string): $CancellablePromise<void> {
-    return $Call.ByID(2602297864, connectionID);
+    return $Call.ByID(821762503, connectionID);
+}
+
+/**
+ * ExecuteSQLScript executes the script using PostgreSQL's simple query protocol,
+ * preserving statement boundaries and PostgreSQL's own transaction semantics.
+ */
+export function ExecuteSQLScript(connectionID: string, script: string): $CancellablePromise<$models.ScriptExecution> {
+    return $Call.ByID(1155140421, connectionID, script);
+}
+
+/**
+ * ExportTableData streams every matching row into a file selected by the user.
+ * A temporary file in the destination directory prevents failed exports from
+ * leaving a partial destination behind.
+ */
+export function ExportTableData(connectionID: string, schema: string, table: string, options: $models.TableQueryOptions, format: string, path: string): $CancellablePromise<void> {
+    return $Call.ByID(3937382199, connectionID, schema, table, options, format, path);
+}
+
+export function GenerateTableSQL(connectionID: string, schema: string, table: string, kind: string): $CancellablePromise<string> {
+    return $Call.ByID(1153320448, connectionID, schema, table, kind);
+}
+
+export function GetFilteredTableData(connectionID: string, schema: string, table: string, limit: number, offset: number, options: $models.TableQueryOptions): $CancellablePromise<$models.TableData> {
+    return $Call.ByID(2707854486, connectionID, schema, table, limit, offset, options);
+}
+
+export function GetSchemaCompletions(connectionID: string): $CancellablePromise<$models.SchemaCompletion[] | null> {
+    return $Call.ByID(3968963489, connectionID);
 }
 
 /**
  * GetTableData returns column names and a page of rows from a user table.
  */
 export function GetTableData(connectionID: string, schema: string, tableName: string, limit: number, offset: number): $CancellablePromise<$models.TableData> {
-    return $Call.ByID(1629305942, connectionID, schema, tableName, limit, offset);
+    return $Call.ByID(2647651603, connectionID, schema, tableName, limit, offset);
+}
+
+export function GetTableMetadata(connectionID: string, schema: string, table: string): $CancellablePromise<$models.TableMetadata> {
+    return $Call.ByID(744805494, connectionID, schema, table);
 }
 
 /**
  * ListDatabases lists connectable user databases, or just the saved database.
  */
 export function ListDatabases(connectionID: string): $CancellablePromise<string[] | null> {
-    return $Call.ByID(3418300580, connectionID);
+    return $Call.ByID(228827019, connectionID);
 }
 
 /**
  * ListSavedConnections returns saved connection metadata without exposing URLs.
  */
 export function ListSavedConnections(): $CancellablePromise<$models.ConnectionInfo[] | null> {
-    return $Call.ByID(231710666);
+    return $Call.ByID(2880772759);
 }
 
 /**
  * ListTables returns user tables from the active connection.
  */
 export function ListTables(connectionID: string): $CancellablePromise<$models.TableInfo[] | null> {
-    return $Call.ByID(179460911, connectionID);
+    return $Call.ByID(1909610934, connectionID);
 }
 
 /**
@@ -69,14 +106,22 @@ export function ListTables(connectionID: string): $CancellablePromise<$models.Ta
  * The saved URL and default database are unchanged when browsing other databases.
  */
 export function OpenDatabase(connectionID: string, database: string): $CancellablePromise<string> {
-    return $Call.ByID(523711787, connectionID, database);
+    return $Call.ByID(3991847998, connectionID, database);
+}
+
+export function OpenSQLFile(): $CancellablePromise<$models.SQLFile> {
+    return $Call.ByID(1272928147);
 }
 
 /**
  * OpenSavedConnection decrypts and opens a connection stored on this device.
  */
 export function OpenSavedConnection(connectionID: string): $CancellablePromise<$models.ConnectionInfo> {
-    return $Call.ByID(2564937657, connectionID);
+    return $Call.ByID(628681218, connectionID);
+}
+
+export function SaveSQLFile(path: string, name: string, content: string): $CancellablePromise<$models.SQLFile> {
+    return $Call.ByID(4196392408, path, name, content);
 }
 
 /**
@@ -84,7 +129,7 @@ export function OpenSavedConnection(connectionID: string): $CancellablePromise<$
  * failure or changed/deleted row rolls back every edit, insertion and deletion.
  */
 export function SaveTableChanges(connectionID: string, schema: string, tableName: string, changes: $models.TableChange[] | null): $CancellablePromise<void> {
-    return $Call.ByID(2633861226, connectionID, schema, tableName, changes);
+    return $Call.ByID(3009241107, connectionID, schema, tableName, changes);
 }
 
 /**
@@ -92,10 +137,9 @@ export function SaveTableChanges(connectionID: string, schema: string, tableName
  * An empty URL retains the encrypted URL without exposing its credentials.
  */
 export function UpdateSavedConnection(connectionID: string, databaseURL: string, displayName: string, showAllDatabases: boolean): $CancellablePromise<$models.ConnectionInfo> {
-    return $Call.ByID(2215518718, connectionID, databaseURL, displayName, showAllDatabases);
+    return $Call.ByID(3455415177, connectionID, databaseURL, displayName, showAllDatabases);
 }
 
-/** Execute a SQL script against an open database. */
-export function ExecuteSQLScript(connectionID: string, script: string): $CancellablePromise<{ results: { columns: string[]; rows: (string | null)[][]; command: string; truncated: boolean }[]; error: string; rolledBack: boolean }> {
-    return $Call.ByName("main.PostgresService.ExecuteSQLScript", connectionID, script);
+export function WriteExportFile(path: string, contents: string): $CancellablePromise<void> {
+    return $Call.ByID(263322974, path, contents);
 }

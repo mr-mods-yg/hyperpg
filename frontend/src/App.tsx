@@ -1,14 +1,19 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { PostgresService, UpdateService } from '../bindings/changeme'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { PostgresService, UpdateService } from './services'
 import DataGrid, { type DataGridHandle } from './DataGrid'
 import type { TableData } from './grid'
 import ConnectionTree, { type ConnectionInfo, type TableInfo } from './ConnectionTree'
 import Icon from './Icon'
-import SqlEditor from './SqlEditor'
+const SqlEditor = lazy(() => import('./SqlEditor'))
+import TableQueryControls from './TableQueryControls'
+import TableDetails from './TableDetails'
+import { emptyTableQuery, type TableQueryOptions } from './table-query'
+import { readWorkspace, writeWorkspace, readHistory, writeHistory, type HistoryEntry } from './workspace'
+import './workspace.css'
 
 type View = 'data' | 'structure'
 type Theme = 'light' | 'dark' | 'cream' | 'discord'
-type WorkspaceTab = { id: string; kind: 'table' | 'script'; connectionId: string; database: { id: string; name: string }; table?: TableInfo; title: string }
+type WorkspaceTab = { id: string; kind: 'table' | 'script'; connectionId: string; database: { id: string; name: string }; table?: TableInfo; title: string; path?: string; savedContent?: string }
 type UpdateChannel = 'stable' | 'nightly'
 type ShortcutAction = 'refresh' | 'closeTab' | 'newScript' | 'runScript' | 'saveChanges' | 'settings'
 const shortcutLabels: Record<ShortcutAction, string> = { refresh: 'Refresh', closeTab: 'Close tab', newScript: 'New SQL script', runScript: 'Run script', saveChanges: 'Save table changes', settings: 'Open settings' }
@@ -21,6 +26,7 @@ function shortcutFromEvent(event: { key: string; ctrlKey: boolean; altKey: boole
 
 type UpdateInfo = { available: boolean; version: string; releaseUrl: string; installError?: string }
 type CachedTablePage = {
+  queryKey: string
   databaseId: string
   schema: string
   table: string
@@ -69,6 +75,10 @@ function App() {
   const tablePage = useRef<CachedTablePage | null>(null)
   const gridRef = useRef<DataGridHandle>(null)
   const [hasPendingChanges, setHasPendingChanges] = useState(false)
+  const handleDirtyChange = useCallback((dirty: boolean) => {
+    if (dirty) { connectionSelection.current++; setOpeningConnectionId('') }
+    setHasPendingChanges(dirty)
+  }, [])
   const [savingChanges, setSavingChanges] = useState(false)
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
   const [tablesLoading, setTablesLoading] = useState(false)
@@ -93,14 +103,26 @@ function App() {
   const [connecting, setConnecting] = useState(false)
   const [view, setView] = useState<View>('data')
   const [showSql, setShowSql] = useState(false)
-  const [tabs, setTabs] = useState<WorkspaceTab[]>([])
-  const [activeTabId, setActiveTabId] = useState('')
+  const [initialWorkspace] = useState(() => ({ current: readWorkspace() }))
+  const [tabs, setTabs] = useState<WorkspaceTab[]>(() => initialWorkspace.current.tabs.map((tab) => ({ ...tab, database: { id: '', name: tab.databaseName } })))
+  const tabsRef = useRef(tabs)
+  tabsRef.current = tabs
+  const [activeTabId, setActiveTabId] = useState(() => initialWorkspace.current.activeTabId)
+  const [history, setHistory] = useState<HistoryEntry[]>(readHistory)
+  const [showHistory, setShowHistory] = useState(false)
+  const [renamingScript, setRenamingScript] = useState<WorkspaceTab | null>(null)
+  const [scriptName, setScriptName] = useState('')
+  const [historySearch, setHistorySearch] = useState('')
+  const [workspaceError, setWorkspaceError] = useState('')
+  const fileInput = useRef<HTMLInputElement>(null)
   const [scriptToClose, setScriptToClose] = useState<WorkspaceTab | null>(null)
   const [runningScripts, setRunningScripts] = useState<Set<string>>(new Set())
-  const nextScriptId = useRef(0)
-  const tableTabState = useRef<Record<string, { offset: number; size: number; search: string; view: View }>>({})
-  const [sqlDrafts, setSqlDrafts] = useState<Record<string, string>>({})
+  const nextScriptId = useRef(Math.max(0, ...initialWorkspace.current.tabs.map((tab) => Number(/^Script (\d+)$/.exec(tab.title)?.[1] ?? 0))))
+  const tableTabState = useRef<Record<string, { offset: number; size: number; search: string; view: View; query: TableQueryOptions }>>({})
+  const [sqlDrafts, setSqlDrafts] = useState<Record<string, string>>(() => initialWorkspace.current.drafts)
   const [rowSearch, setRowSearch] = useState('')
+  const [tableQuery, setTableQuery] = useState<TableQueryOptions>(emptyTableQuery)
+  const queryKey = JSON.stringify(tableQuery)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     try {
@@ -163,7 +185,7 @@ function App() {
   const activeConnection = connections.find((connection) => connection.id === selectedConnectionId) ?? null
   const cachedPage = tablePage.current
   const sameTablePage = cachedPage && cachedPage.databaseId === selectedDatabase.id && cachedPage.schema === selectedTable?.schema &&
-    cachedPage.table === selectedTable?.name && cachedPage.offset === pageOffset
+    cachedPage.table === selectedTable?.name && cachedPage.offset === pageOffset && cachedPage.queryKey === queryKey
   const tableData = sameTablePage ? loadedTableData : null
   const tableStale = !!sameTablePage && cachedPage.refreshKey !== refreshKey
   const tableBusy = tableLoading || (tableStale && !tableError)
@@ -189,6 +211,17 @@ function App() {
         if (cancelled || request !== connectionSelection.current) return
         const items = saved ?? []
         setConnections(items)
+        const restored = initialWorkspace.current.tabs.find((tab) => tab.id === initialWorkspace.current.activeTabId) ?? initialWorkspace.current.tabs[0]
+        if (restored) {
+          if (!items.some((item) => item.id === restored.connectionId)) { setWorkspaceError('The saved connection for this workspace is unavailable. Your drafts are preserved.'); return }
+          setOpeningConnectionId(restored.connectionId)
+          const handle = await PostgresService.OpenDatabase(restored.connectionId, restored.databaseName)
+          if (cancelled || request !== connectionSelection.current) return
+          setTabs((current) => current.map((tab) => tab.id === restored.id ? { ...tab, database: { name: restored.databaseName, id: handle } } : tab))
+          setSelectedConnectionId(restored.connectionId); setSelectedDatabase({ name: restored.databaseName, id: handle })
+          setActiveTabId(restored.id); setShowSql(restored.kind === 'script'); setSelectedTable(restored.table ?? null)
+          return
+        }
         if (items.length === 0) return
 
         setOpeningConnectionId(items[0].id)
@@ -206,6 +239,11 @@ function App() {
     void restoreSavedConnections()
     return () => { cancelled = true }
   }, [])
+
+  useEffect(() => {
+    writeWorkspace({ tabs: tabs.map(({ id, kind, connectionId, database, table, title, path, savedContent }) => ({ id, kind, connectionId, databaseName: database.name, table, title, path, savedContent })), activeTabId, drafts: sqlDrafts })
+  }, [tabs, activeTabId, sqlDrafts])
+  useEffect(() => { writeHistory(history) }, [history])
 
   useLayoutEffect(() => {
     const root = document.documentElement
@@ -308,19 +346,21 @@ function App() {
   }
 
   useEffect(() => {
-    if (!showConnectionDialog && !showSettingsDialog && !scriptToClose) return
+    if (!showConnectionDialog && !showSettingsDialog && !scriptToClose && !showHistory && !renamingScript) return
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || recordingShortcut) return
-      if (scriptToClose) setScriptToClose(null)
+      if (renamingScript) setRenamingScript(null)
+      else if (showHistory) setShowHistory(false)
+      else if (scriptToClose) setScriptToClose(null)
       else if (showSettingsDialog) setShowSettingsDialog(false)
       else if (!connecting) setShowConnectionDialog(false)
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [showConnectionDialog, showSettingsDialog, connecting, recordingShortcut, scriptToClose])
+  }, [showConnectionDialog, showSettingsDialog, connecting, recordingShortcut, scriptToClose, showHistory, renamingScript])
 
   useEffect(() => {
-    if (!showConnectionDialog && !showSettingsDialog && !scriptToClose) return
+    if (!showConnectionDialog && !showSettingsDialog && !scriptToClose && !showHistory && !renamingScript) return
     const dialog = document.querySelector<HTMLElement>('.modal-backdrop [role="dialog"]')
     const backdrop = dialog?.closest<HTMLElement>('.modal-backdrop')
     if (!dialog || !backdrop) return
@@ -360,7 +400,7 @@ function App() {
       if (opener?.isConnected) opener.focus()
       else previouslyFocused?.focus()
     }
-  }, [showConnectionDialog, showSettingsDialog, scriptToClose])
+  }, [showConnectionDialog, showSettingsDialog, scriptToClose, showHistory, renamingScript])
 
   const pageStart = tableData?.rows.length ? pageOffset + 1 : 0
   const pageEnd = tableData ? Math.min(pageOffset + tableData.rows.length, tableData.rowCount) : 0
@@ -405,9 +445,12 @@ function App() {
     }
 
     let cancelled = false
+    const readPage = (limit: number, offset: number) => tableQuery.filters.length || tableQuery.sort.length
+      ? PostgresService.GetFilteredTableData(selectedDatabase.id, selectedTable.schema, selectedTable.name, limit, offset, tableQuery)
+      : PostgresService.GetTableData(selectedDatabase.id, selectedTable.schema, selectedTable.name, limit, offset)
     const current = tablePage.current
     const sameLocation = current && current.databaseId === selectedDatabase.id && current.schema === selectedTable.schema &&
-      current.table === selectedTable.name && current.offset === pageOffset
+      current.table === selectedTable.name && current.offset === pageOffset && current.queryKey === queryKey
     const samePage = sameLocation && current.refreshKey === refreshKey
 
     if (samePage && pageSize <= current.limit) {
@@ -424,7 +467,7 @@ function App() {
       setTableLoading(true)
       const loadMore = async () => {
         try {
-          const extra = normalizeTableData(await PostgresService.GetTableData(selectedDatabase.id, selectedTable.schema, selectedTable.name, extraLimit, extraOffset))
+          const extra = normalizeTableData(await readPage(extraLimit, extraOffset))
           if (cancelled) return
           const previousBoundary = current.data.identities[current.data.rows.length - 1]
           const nextBoundary = extra.identities[0]
@@ -436,7 +479,7 @@ function App() {
           const canAppend = boundaryMatches && JSON.stringify(current.data.columns) === JSON.stringify(extra.columns)
           const data = canAppend
             ? { ...extra, rows: [...current.data.rows, ...extra.rows.slice(overlap)], identities: [...current.data.identities, ...extra.identities.slice(overlap)] }
-            : normalizeTableData(await PostgresService.GetTableData(selectedDatabase.id, selectedTable.schema, selectedTable.name, pageSize, pageOffset))
+            : normalizeTableData(await readPage(pageSize, pageOffset))
           if (cancelled) return
           if (!canAppend) setTableSelectionVersion((version) => version + 1)
           current.data = data
@@ -460,11 +503,11 @@ function App() {
       }
       setTableLoading(true)
       setTableError('')
-      PostgresService.GetTableData(selectedDatabase.id, selectedTable.schema, selectedTable.name, pageSize, pageOffset)
+      readPage(pageSize, pageOffset)
         .then((result) => {
           if (!cancelled) {
             const data = normalizeTableData(result)
-            tablePage.current = { databaseId: selectedDatabase.id, schema: selectedTable.schema, table: selectedTable.name, offset: pageOffset, refreshKey, data, limit: pageSize, appliedSize: pageSize }
+            tablePage.current = { queryKey, databaseId: selectedDatabase.id, schema: selectedTable.schema, table: selectedTable.name, offset: pageOffset, refreshKey, data, limit: pageSize, appliedSize: pageSize }
             setTableData(data)
           }
         })
@@ -477,7 +520,7 @@ function App() {
     }
 
     return () => { cancelled = true }
-  }, [selectedDatabase.id, selectedTable?.schema, selectedTable?.name, pageSize, pageOffset, refreshKey])
+  }, [selectedDatabase.id, selectedTable?.schema, selectedTable?.name, pageSize, pageOffset, refreshKey, queryKey])
 
   const guardNavigation = (action: () => void) => {
     if (savingChanges) return
@@ -568,7 +611,7 @@ function App() {
       connectionSelection.current++
       setConnections((current) => editingConnectionId ? current.map((item) => item.id === connection.id ? connection : item) : [connection, ...current])
       setConnectionRevisions((current) => ({ ...current, [connection.id]: (current[connection.id] ?? 0) + 1 }))
-      if (editingConnectionId) setTabs((current) => current.filter((tab) => tab.connectionId !== editingConnectionId))
+      if (editingConnectionId) setTabs((current) => current.map((tab) => tab.connectionId === editingConnectionId ? { ...tab, database: { ...tab.database, id: '' } } : tab))
       setActiveTabId('')
       setShowSql(false)
       setSelectedConnectionId(connection.id)
@@ -659,7 +702,7 @@ function App() {
     connectionSelection.current++
     setOpeningConnectionId('')
     setSavedConnectionsError('')
-    setTabs((current) => current.filter((tab) => tab.connectionId !== connection.id))
+    setTabs((current) => current.map((tab) => tab.connectionId === connection.id ? { ...tab, database: { ...tab.database, id: '' } } : tab))
     if (selectedConnectionId === connection.id) { setActiveTabId(''); setShowSql(false) }
     const remaining = connections.filter((item) => item.id !== connection.id)
     setConnections((current) => current.filter((item) => item.id !== connection.id))
@@ -674,8 +717,8 @@ function App() {
   }
 
   useLayoutEffect(() => {
-    if (activeTabId && !showSql && selectedTable) tableTabState.current[activeTabId] = { offset: pageOffset, size: pageSize, search: rowSearch, view }
-  }, [activeTabId, showSql, selectedTable, pageOffset, pageSize, rowSearch, view])
+    if (activeTabId && !showSql && selectedTable) tableTabState.current[activeTabId] = { offset: pageOffset, size: pageSize, search: rowSearch, view, query: tableQuery }
+  }, [activeTabId, showSql, selectedTable, pageOffset, pageSize, rowSearch, view, tableQuery])
 
   useEffect(() => {
     if (!scriptRefreshPending || hasPendingChanges || savingChanges || pendingNavigation) return
@@ -686,7 +729,24 @@ function App() {
   const activateTab = (tab: WorkspaceTab) => {
     connectionSelection.current++
     setOpeningConnectionId('')
-    if (activeTabId === tab.id) return
+    if (activeTabId === tab.id && tab.database.id) return
+    if (!tab.database.id) {
+      if (!connections.some((connection) => connection.id === tab.connectionId)) { setWorkspaceError('The saved connection for this workspace is unavailable. Your drafts are preserved.'); return }
+      const request = ++connectionSelection.current
+      setOpeningConnectionId(tab.connectionId)
+      void PostgresService.OpenDatabase(tab.connectionId, tab.database.name).then((handle) => {
+        if (request !== connectionSelection.current) return
+        const currentTab = tabsRef.current.find((item) => item.id === tab.id)
+        if (!currentTab) return
+        const reopened = { ...currentTab, database: { ...currentTab.database, id: handle } }
+        setTabs((current) => current.map((item) => item.id === tab.id ? reopened : item)); setWorkspaceError(''); setSavedConnectionsError(''); activateResolvedTab(reopened)
+      }).catch((error: unknown) => { if (request === connectionSelection.current) setWorkspaceError(errorMessage(error, 'Could not reopen this database. Your draft is preserved.')) }).finally(() => { if (request === connectionSelection.current) setOpeningConnectionId('') })
+      return
+    }
+    activateResolvedTab(tab)
+  }
+
+  const activateResolvedTab = (tab: WorkspaceTab) => {
     const saved = tableTabState.current[tab.id]
     setSelectedConnectionId(tab.connectionId)
     setSelectedDatabase(tab.database)
@@ -697,6 +757,7 @@ function App() {
     setPageSize(saved?.size ?? 100)
     setRowSearch(saved?.search ?? '')
     setView(saved?.view ?? 'data')
+    setTableQuery(saved?.query ?? emptyTableQuery())
     setMobileNavOpen(false)
   }
 
@@ -715,10 +776,41 @@ function App() {
     setTabs((current) => [...current, tab])
     activateTab(tab)
   })
+  const openScriptContent = (name: string, content: string, path = '', connectionId = selectedConnectionId, database = selectedDatabase) => {
+    const tab: WorkspaceTab = { id: crypto.randomUUID(), kind: 'script', connectionId, database, title: name, path, savedContent: path ? content : undefined }
+    setTabs((current) => [...current, tab]); setSqlDrafts((current) => ({ ...current, [tab.id]: content })); activateTab(tab)
+  }
+  const fileService = PostgresService as typeof PostgresService & { OpenSQLFile?: () => Promise<{ path: string; name: string; content: string }>; SaveSQLFile?: (path: string, name: string, content: string) => Promise<{ path: string; name: string; content: string }> }
+  const openScript = async () => {
+    if (!fileService.OpenSQLFile) { fileInput.current?.click(); return }
+    try { const file = await fileService.OpenSQLFile(); if (file?.path) guardNavigation(() => openScriptContent(file.name, file.content, file.path)) }
+    catch (error) { setWorkspaceError(errorMessage(error, 'Could not open the script.')) }
+  }
+  const saveScript = async (tab: WorkspaceTab) => {
+    const content = sqlDrafts[tab.id] ?? ''
+    try {
+      if (fileService.SaveSQLFile) {
+        const file = await fileService.SaveSQLFile(tab.path ?? '', tab.title, content)
+        if (!file?.path) return
+        setTabs((current) => current.map((item) => item.id === tab.id ? { ...item, path: file.path, title: tab.path ? item.title : file.name, savedContent: content } : item))
+      } else {
+        const url = URL.createObjectURL(new Blob([content], { type: 'application/sql' })); const link = document.createElement('a'); link.href = url; link.download = tab.title.endsWith('.sql') ? tab.title : `${tab.title}.sql`; link.click(); URL.revokeObjectURL(url)
+        setTabs((current) => current.map((item) => item.id === tab.id ? { ...item, savedContent: content } : item))
+      }
+      setWorkspaceError('')
+    } catch (error) { setWorkspaceError(errorMessage(error, 'Could not save the script.')) }
+  }
+  const renameScript = (tab: WorkspaceTab) => { setScriptName(tab.title); setRenamingScript(tab) }
+  const openHistoryEntry = (entry: HistoryEntry) => guardNavigation(() => {
+    setShowHistory(false)
+    openScriptContent('History query', entry.sql, '', entry.connectionId, { name: entry.databaseName, id: '' })
+  })
   const closeTab = (tab: WorkspaceTab, confirmed = false) => {
     if (runningScripts.has(tab.id)) return
-    if (tab.kind === 'script' && sqlDrafts[tab.id]?.trim() && !confirmed) { setScriptToClose(tab); return }
+    if (tab.kind === 'script' && (sqlDrafts[tab.id] ?? '') !== (tab.savedContent ?? '') && !confirmed) { setScriptToClose(tab); return }
     const close = () => {
+      connectionSelection.current++
+      setOpeningConnectionId('')
       const index = tabs.findIndex((item) => item.id === tab.id)
       const remaining = tabs.filter((item) => item.id !== tab.id)
       setTabs(remaining)
@@ -749,7 +841,7 @@ function App() {
       const action = (Object.keys(shortcutLabels) as ShortcutAction[]).find((key) => shortcuts[key] && shortcuts[key] === pressed)
       if (!action) return
       event.preventDefault()
-      if (showSettingsDialog || showConnectionDialog || pendingNavigation || scriptToClose || event.repeat) return
+      if (showSettingsDialog || showConnectionDialog || pendingNavigation || scriptToClose || showHistory || renamingScript || event.repeat) return
       if (action === 'refresh' && !activeConnection || action === 'closeTab' && !activeTabId || action === 'newScript' && !activeConnection || action === 'runScript' && !showSql || action === 'saveChanges' && (showSql || !selectedTable || !hasPendingChanges || savingChanges)) return
       if (action === 'refresh') guardNavigation(() => setRefreshKey((value) => value + 1))
       else if (action === 'closeTab') { const tab = tabs.find((item) => item.id === activeTabId); if (tab) closeTab(tab) }
@@ -841,19 +933,22 @@ function App() {
             {activeConnection ? <><span className="crumb-muted">{activeConnection.name}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className={selectedTable ? 'crumb-muted' : 'crumb-current'}>{selectedDatabase.name}</span>{selectedTable ? <><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-muted">{selectedTable.schema}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-current">{selectedTable.name}</span></> : null}</> : null}
           </div>
           <div className="topbar-right">
-            {activeConnection ? <button className="topbar-add" type="button" onClick={newScript}>New SQL script</button> : null}
+            {activeConnection ? <><button className="topbar-add" type="button" onClick={newScript}>New SQL script</button><button className="topbar-add" type="button" onClick={() => void openScript()}>Open SQL</button></> : null}
+            <button className="topbar-add" type="button" onClick={() => setShowHistory(true)}>Query history</button>
+            <input ref={fileInput} type="file" accept=".sql,text/plain,application/sql" hidden onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (file) void file.text().then((content) => guardNavigation(() => openScriptContent(file.name, content))).catch((error: unknown) => setWorkspaceError(errorMessage(error, 'Could not open the script.'))) }} />
             <button className="topbar-add" type="button" onClick={openConnectionDialog}><Icon name="plus" /> Add connection</button>
           </div>
         </header>
 
-        {activeConnection ? (
+        {activeConnection || tabs.length ? (
           <div className="content-area">
+            {savedConnectionsError || workspaceError ? <div className="notice notice-error compact-notice" role="alert">{savedConnectionsError || workspaceError}</div> : null}
             {tabs.length ? <div className="editor-tab-bar" role="tablist" aria-label="Open workspaces" onKeyDown={handleTableViewKeyDown}>{tabs.map((tab) => <div className={`editor-tab ${activeTabId === tab.id ? 'is-active' : ''}`} key={tab.id}>
-              <button type="button" className="editor-tab-select" role="tab" id={`workspace-tab-${tab.id}`} aria-controls={`workspace-panel-${tab.id}`} aria-selected={activeTabId === tab.id} tabIndex={activeTabId === tab.id || (!activeTabId && tabs[0]?.id === tab.id) ? 0 : -1} aria-current={activeTabId === tab.id ? 'page' : undefined} title={`${tab.database.name}${tab.table ? ` · ${tab.table.schema}` : ''}`} onClick={() => { if (activeTabId !== tab.id) guardNavigation(() => activateTab(tab)) }}><Icon name={tab.kind === 'table' ? 'table' : 'edit'} /><span>{tab.title}</span></button>
+              <button type="button" className="editor-tab-select" role="tab" id={`workspace-tab-${tab.id}`} aria-controls={`workspace-panel-${tab.id}`} aria-selected={activeTabId === tab.id} tabIndex={activeTabId === tab.id || (!activeTabId && tabs[0]?.id === tab.id) ? 0 : -1} aria-current={activeTabId === tab.id ? 'page' : undefined} title={`${tab.database.name}${tab.table ? ` · ${tab.table.schema}` : ''}`} onClick={() => { if (activeTabId !== tab.id || !tab.database.id) guardNavigation(() => activateTab(tab)) }}><Icon name={tab.kind === 'table' ? 'table' : 'edit'} /><span>{tab.title}</span></button>
               <button type="button" className="editor-tab-close" disabled={runningScripts.has(tab.id)} aria-label={`Close ${tab.title}`} onClick={() => closeTab(tab)}>×</button>
             </div>)}</div> : null}
-            {tabs.filter((tab) => tab.kind === 'script').map((tab) => <div key={tab.id} className="script-tab-panel" id={`workspace-panel-${tab.id}`} role="tabpanel" aria-labelledby={`workspace-tab-${tab.id}`} hidden={activeTabId !== tab.id}><SqlEditor onRunningChange={(running) => setRunningScripts((current) => { const next = new Set(current); if (running) next.add(tab.id); else next.delete(tab.id); return next })} active={activeTabId === tab.id && !showSettingsDialog} databaseId={tab.database.id} databaseName={tab.database.name} script={sqlDrafts[tab.id] ?? ''} onScriptChange={(script) => setSqlDrafts((drafts) => ({ ...drafts, [tab.id]: script }))} onExecuted={() => setScriptRefreshPending(true)} /></div>)}
-            {!showSql ? <>
+            {tabs.filter((tab) => tab.kind === 'script').map((tab) => <div key={tab.id} className="script-tab-panel" id={`workspace-panel-${tab.id}`} role="tabpanel" aria-labelledby={`workspace-tab-${tab.id}`} hidden={activeTabId !== tab.id}><div className="script-file-actions"><button type="button" onClick={() => void saveScript(tab)}>Save SQL</button><button type="button" onClick={() => renameScript(tab)}>Rename</button><span>{(sqlDrafts[tab.id] ?? '') !== (tab.savedContent ?? '') ? 'Unsaved changes' : tab.path ? 'Saved' : ''}</span></div><Suspense fallback={<span role="status">Loading editor…</span>}><SqlEditor onRunningChange={(running) => setRunningScripts((current) => { const next = new Set(current); if (running) next.add(tab.id); else next.delete(tab.id); return next })} active={activeTabId === tab.id && !showSettingsDialog} databaseId={tab.database.id} databaseName={tab.database.name} script={sqlDrafts[tab.id] ?? ''} onScriptChange={(script) => setSqlDrafts((drafts) => ({ ...drafts, [tab.id]: script }))} onExecuted={() => setScriptRefreshPending(true)} onHistory={(entry) => setHistory((current) => [{ ...entry, id: crypto.randomUUID(), connectionId: tab.connectionId, databaseName: tab.database.name }, ...current].slice(0, 200))} /></Suspense></div>)}
+            {!showSql && activeConnection ? <>
             {!selectedTable ? <section className="database-header">
               <div>
                 <h1>{selectedDatabase.name}</h1>
@@ -864,7 +959,7 @@ function App() {
               </button>
             </section> : null}
 
-            {savedConnectionsError ? <div className="notice notice-error compact-notice" role="alert">{savedConnectionsError}</div> : null}
+
 
             <section id={activeTabId ? `workspace-panel-${activeTabId}` : undefined} role={activeTabId ? 'tabpanel' : undefined} aria-labelledby={activeTabId ? `workspace-tab-${activeTabId}` : undefined} className={`workspace-section ${selectedTable ? 'has-selected-table' : ''}`}>
               <div className="workspace-tabs">
@@ -905,10 +1000,12 @@ function App() {
                 <div className="table-workspace" id="table-view-panel" role="tabpanel" aria-labelledby={view === 'data' ? 'table-view-data-tab' : 'table-view-structure-tab'} tabIndex={0}>
                   {tableError ? <div className="notice notice-error" role="alert">{tableError}</div> : null}
                   {view === 'data' ? <>
+                    <TableQueryControls key={activeTabId} columns={tableData?.columns.map((column) => column.name) ?? []} value={tableQuery} disabled={tableBusy || savingChanges} onApply={(query) => guardNavigation(() => { setTableQuery(query); setPageOffset(0); setRowSearch('') })} />
                     {tableData ? <DataGrid
-                      key={`${selectedDatabase.id}:${selectedTable.schema}:${selectedTable.name}:${pageOffset}:${cachedPage!.refreshKey}`}
+                      key={`${selectedDatabase.id}:${selectedTable.schema}:${selectedTable.name}:${pageOffset}:${cachedPage!.refreshKey}:${queryKey}`}
                       ref={gridRef} data={tableData} connectionID={selectedDatabase.id} schema={selectedTable.schema} table={selectedTable.name}
-                      pageOffset={pageOffset} loading={tableBusy} readOnly={tableStale} selectionVersion={tableSelectionVersion} search={rowSearch} onSearchChange={setRowSearch} onDirtyChange={setHasPendingChanges} onSavingChange={setSavingChanges}
+                      queryOptions={tableQuery} onSort={(column) => guardNavigation(() => { const previous = tableQuery.sort[0]; const direction = previous?.column === column && previous.direction === 'ASC' ? 'DESC' : 'ASC'; setTableQuery({ ...tableQuery, sort: [{ column, direction }] }); setPageOffset(0) })}
+                      pageOffset={pageOffset} loading={tableBusy} readOnly={tableStale} selectionVersion={tableSelectionVersion} search={rowSearch} onSearchChange={setRowSearch} onDirtyChange={handleDirtyChange} onSavingChange={setSavingChanges}
                       onSaved={(rowCountDelta) => {
                         const remainingCount = Math.max(0, tableData.rowCount + rowCountDelta)
                         setPageOffset((offset) => Math.min(offset, Math.max(0, Math.ceil(remainingCount / pageSize) - 1) * pageSize))
@@ -965,6 +1062,7 @@ function App() {
                         </table>
                       </div>
                     ) : null}
+                    <TableDetails key={`${selectedDatabase.id}:${selectedTable.schema}:${selectedTable.name}`} databaseId={selectedDatabase.id} schema={selectedTable.schema} table={selectedTable.name} onScript={(sql, title) => guardNavigation(() => openScriptContent(title, sql))} />
                   </>}
                   <div className="table-statusbar">
                     <span className="table-status-metrics" title="Fetched rows on this page; size is the estimated UTF-8 JSON size of row values, excluding metadata and network overhead.">{tableData ? `${tableData.rows.length.toLocaleString()} ${tableData.rows.length === 1 ? 'row' : 'rows'} · ~${formatBytes(loadedBytes)}` : '—'}</span>
@@ -978,7 +1076,7 @@ function App() {
         ) : (
           <div className="welcome-area">
             <div className="welcome-content">
-              {savedConnectionsError ? <div className="notice notice-error compact-notice" role="alert">{savedConnectionsError}</div> : null}
+              {savedConnectionsError || workspaceError ? <div className="notice notice-error compact-notice" role="alert">{savedConnectionsError || workspaceError}</div> : null}
               <div className="welcome-art" aria-hidden="true">
                 <div className="art-orbit art-orbit-one" /><div className="art-orbit art-orbit-two" />
                 <div className="art-db"><DatabaseIcon /></div>
@@ -1001,6 +1099,14 @@ function App() {
         <button className="update-now-button" type="button" onClick={() => guardNavigation(() => { void handleInstallUpdate() })} disabled={installingUpdate || !updateInfo.available}>{installingUpdate ? <><span className="button-spinner" />{updateRestarting ? 'Opening installer…' : 'Updating…'}</> : updateInfo.available ? 'Update now' : 'Update unavailable'}</button>
         <button className="update-dismiss" type="button" aria-label="Dismiss update notice" onClick={() => setDismissedUpdate(updateInfo.version || 'update-error')}><svg viewBox="0 0 18 18" fill="none"><path d="m4 4 10 10M14 4 4 14" /></svg></button>
       </aside> : null}
+
+      {renamingScript ? <div className="modal-backdrop" role="presentation"><section className="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="rename-title"><div className="dialog-heading"><h2 id="rename-title">Rename script</h2></div><form onSubmit={(event) => { event.preventDefault(); const title = scriptName.trim(); if (!title) return; setTabs((current) => current.map((tab) => tab.id === renamingScript.id ? { ...tab, title } : tab)); setRenamingScript(null) }}><label className="field-label" htmlFor="script-name">Script name</label><input id="script-name" className="dialog-input" autoFocus value={scriptName} onChange={(event) => setScriptName(event.target.value)} /><div className="dialog-actions"><button type="button" className="cancel-button" onClick={() => setRenamingScript(null)}>Cancel</button><button type="submit" className="connect-button" disabled={!scriptName.trim()}>Rename</button></div></form></section></div> : null}
+      {showHistory ? <div className="modal-backdrop" role="presentation"><section className="connection-dialog history-dialog" role="dialog" aria-modal="true" aria-labelledby="history-title">
+        <div className="dialog-heading"><h2 id="history-title">Query history</h2></div>
+        <input className="dialog-input" aria-label="Search query history" autoFocus placeholder="Search SQL or database" value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} />
+        <div className="history-list">{history.filter((entry) => `${entry.sql} ${entry.databaseName}`.toLowerCase().includes(historySearch.toLowerCase())).map((entry) => <article className="history-entry" key={entry.id}><button type="button" className="history-open" onClick={() => openHistoryEntry(entry)}><code>{entry.sql}</code><small>{entry.databaseName} · {new Date(entry.executedAt).toLocaleString()} · {Math.round(entry.durationMs)} ms · {entry.error ? 'Failed' : 'Succeeded'}</small></button><button type="button" aria-label="Delete history entry" onClick={() => setHistory((current) => current.filter((item) => item.id !== entry.id))}>×</button></article>)}{history.length === 0 ? <p>No queries yet.</p> : null}</div>
+        <div className="dialog-actions"><button type="button" className="cancel-button" disabled={!history.length} onClick={() => setHistory([])}>Clear history</button><button type="button" className="connect-button" onClick={() => setShowHistory(false)}>Done</button></div>
+      </section></div> : null}
 
       {scriptToClose ? <div className="modal-backdrop" role="presentation">
         <section className="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="close-script-title">

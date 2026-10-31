@@ -16,7 +16,11 @@ The Windows installer sets up HyperPG for the current user, adds Start Menu and 
 
 - Browse database schemas, tables, columns, and rows, and edit table data with staged, transactional saves.
 - Page through table rows and choose how many rows to display.
-- Run SQL scripts against the selected database and inspect statement results.
+- Write SQL with highlighting, line numbers, schema autocomplete, formatting, and current-statement execution.
+- Save and open SQL files, rename scripts, and restore tabs and drafts after restart.
+- Search query history and reopen earlier queries in a new tab.
+- Filter table rows in PostgreSQL, sort columns, and inspect keys, indexes, constraints, and generated SQL.
+- Export loaded or selected rows to CSV, JSON, or SQL files, or stream an entire filtered table to a file.
 - Select multiple cells and copy them as CSV.
 - Add, duplicate, delete, restore, and revert rows and cells from the table context menu.
 - Resize the sidebar and collapse schema groups.
@@ -42,7 +46,22 @@ Choose **Stable** or **Nightly** in Settings. Stable releases use version tags o
 
 ## Running SQL scripts
 
-Open a database and choose **New SQL script**. Type SQL, then select **Run script**. Select text to run only that portion. Results are shown for each statement, with the first 500 rows of each result displayed and available to copy as CSV. Include `COMMIT` when using an explicit transaction; an unfinished transaction is rolled back when execution ends.
+Open a database and choose **New SQL script**. Type SQL, then select **Run script**. Select text to run only that portion, or choose **Run statement** to run the statement at the cursor. **Format** formats the script. Table and column suggestions use the active database schema. Results are shown for each statement, with the first 500 rows of each result displayed and available to copy as CSV. Use **Open SQL**, **Save SQL**, and **Rename** to manage script files. Drafts and open tabs are stored locally and restored using the original connection and database. **Query history** records SQL, database, timing, and failures; entries can be reopened or cleared.
+
+Use **Export** to save loaded results. SQL results remain limited to the displayed first 500 rows; **Entire filtered table** in a table tab streams all matching saved rows directly from PostgreSQL. JSON preserves exact numeric values as strings. SQL exports omit computed columns and preserve identity values.
+
+Table headers sort in PostgreSQL; **Filters** applies conditions across the table, while **Search this page** searches only loaded rows. **Structure** shows constraints and indexes and can generate SQL in a new script tab. Generated DDL includes columns, constraints, and independent indexes, and labels omitted PostgreSQL table properties; it is not a full schema backup.
+
+Include `COMMIT` when using an explicit transaction; an unfinished transaction is rolled back when execution ends.
+
+## Project layout
+
+- `main.go` boots the desktop app and embeds its assets and version.
+- `internal/database/` contains PostgreSQL services, local connection storage, file operations, and their tests.
+- `internal/updates/` contains release checks and platform update helpers.
+- `frontend/` contains the React interface and generated Wails bindings.
+- `scripts/release/` contains release-note generation and its tests.
+- `build/` contains platform packaging and task definitions.
 
 ## Build from source
 

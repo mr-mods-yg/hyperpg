@@ -34,8 +34,8 @@ const size = (page: Page) => page.getByRole('combobox', { name: 'Rows per page' 
 const grid = (page: Page) => page.getByRole('grid', { name: 'public.items data' })
 
 test.beforeEach(async ({ page }) => {
-  await page.route('**/bindings/changeme/postgresservice.*', route => route.fulfill({ contentType: 'text/javascript', body: postgresFixture }))
-  await page.route('**/bindings/changeme/updateservice.*', route => route.fulfill({ contentType: 'text/javascript', body: 'export async function CheckForUpdates() { return { available: false, version: "dev", releaseUrl: "" } }' }))
+  await page.route('**/bindings/changeme/internal/database/postgresservice.*', route => route.fulfill({ contentType: 'text/javascript', body: postgresFixture }))
+  await page.route('**/bindings/changeme/internal/updates/updateservice.*', route => route.fulfill({ contentType: 'text/javascript', body: 'export async function CheckForUpdates() { return { available: false, version: "dev", releaseUrl: "" } }' }))
   await page.goto('/')
   await page.getByRole('button', { name: 'Open items table', exact: true }).click()
   await expect(grid(page).getByRole('rowheader')).toHaveCount(100)

@@ -32,8 +32,8 @@ const metrics = (page: Page) => page.locator('.table-status-metrics')
 const activity = (page: Page) => page.locator('.table-status-activity')
 
 test.beforeEach(async ({ page }) => {
-  await page.route('**/bindings/changeme/postgresservice.*', route => route.fulfill({ contentType: 'text/javascript', body: postgresFixture }))
-  await page.route('**/bindings/changeme/updateservice.*', route => route.fulfill({ contentType: 'text/javascript', body: 'export async function CheckForUpdates() { return { available: false, version: "dev", releaseUrl: "" } }' }))
+  await page.route('**/bindings/changeme/internal/database/postgresservice.*', route => route.fulfill({ contentType: 'text/javascript', body: postgresFixture }))
+  await page.route('**/bindings/changeme/internal/updates/updateservice.*', route => route.fulfill({ contentType: 'text/javascript', body: 'export async function CheckForUpdates() { return { available: false, version: "dev", releaseUrl: "" } }' }))
   await page.goto('/')
   await expect(page.getByRole('button', { name: 'Open items table' })).toBeVisible()
 })

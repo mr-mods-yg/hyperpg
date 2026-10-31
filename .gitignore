@@ -4,7 +4,7 @@ frontend/dist
 frontend/node_modules
 frontend/test-results
 frontend/playwright-report
-.github/scripts/__pycache__/
+**/__pycache__/
 build/linux/appimage/build
 build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 # Mobile generated (per-machine; overlays hold absolute paths)

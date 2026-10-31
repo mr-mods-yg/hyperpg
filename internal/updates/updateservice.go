@@ -1,10 +1,9 @@
-package main
+package updates
 
 import (
 	"archive/tar"
 	"compress/gzip"
 	"crypto/sha256"
-	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -26,9 +25,6 @@ const githubReleaseAPI = "https://api.github.com/repos/mr-mods-yg/hyperpg/releas
 
 const maxUpdateDownloadSize = 512 << 20
 
-//go:embed VERSION
-var embeddedVersion string
-
 type UpdateInfo struct {
 	Available    bool   `json:"available"`
 	Version      string `json:"version"`
@@ -37,6 +33,7 @@ type UpdateInfo struct {
 }
 
 type UpdateService struct {
+	version    string
 	mu         sync.Mutex
 	app        *application.App
 	installing bool
@@ -59,13 +56,14 @@ type githubAsset struct {
 	Size               int64  `json:"size"`
 }
 
-func NewUpdateService() *UpdateService {
+func NewUpdateService(version string) *UpdateService {
 	return &UpdateService{
-		client: &http.Client{Timeout: 30 * time.Second},
+		version: version,
+		client:  &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
-func (s *UpdateService) setApp(app *application.App) {
+func AttachApp(s *UpdateService, app *application.App) {
 	s.mu.Lock()
 	s.app = app
 	s.mu.Unlock()
@@ -89,7 +87,7 @@ func (s *UpdateService) CheckForUpdates(channel string) (UpdateInfo, error) {
 	if _, ok := findAsset(release, platformAssetName()); !ok {
 		return UpdateInfo{}, fmt.Errorf("This release has no build for %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
-	available, version := releaseIsNewer(channel, release.TagName, currentAppVersion())
+	available, version := releaseIsNewer(channel, release.TagName, s.currentAppVersion())
 	return addPersistedUpdateError(UpdateInfo{Available: available, Version: version, ReleaseURL: release.HTMLURL}), nil
 }
 
@@ -132,7 +130,7 @@ func (s *UpdateService) InstallUpdate(channel string) error {
 	if err != nil {
 		return err
 	}
-	available, _ := releaseIsNewer(channel, release.TagName, currentAppVersion())
+	available, _ := releaseIsNewer(channel, release.TagName, s.currentAppVersion())
 	if !available {
 		return fmt.Errorf("You already have the latest %s version", channel)
 	}
@@ -576,6 +574,6 @@ func nightlyRunNumber(tag string) (uint64, bool) {
 	return run, err == nil && run > 0
 }
 
-func currentAppVersion() string {
-	return strings.TrimPrefix(strings.TrimSpace(embeddedVersion), "\ufeff")
+func (s *UpdateService) currentAppVersion() string {
+	return strings.TrimPrefix(strings.TrimSpace(s.version), "\ufeff")
 }

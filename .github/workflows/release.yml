@@ -95,7 +95,7 @@ jobs:
           ref: ${{ github.event_name == 'push' && github.ref || (github.event_name == 'workflow_dispatch' && inputs.source_ref) || 'nightly' }}
           fetch-depth: 0
       - name: Check nightly release note generation
-        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+        run: python3 -m unittest discover -s scripts/release -p 'test_*.py'
       - name: Resolve source commit and release channel
         id: resolve
         shell: bash
@@ -338,7 +338,7 @@ jobs:
           short_sha="${SOURCE_SHA:0:7}"
           title="$RELEASE_VERSION ($(date -u +'%Y-%m-%d'), $short_sha)"
           tag="v$RELEASE_VERSION"
-          python3 .github/scripts/nightly_notes.py \
+          python3 scripts/release/nightly_notes.py \
             --version "$RELEASE_VERSION" \
             --source "$SOURCE_SHA" \
             --repository "$GITHUB_REPOSITORY" \

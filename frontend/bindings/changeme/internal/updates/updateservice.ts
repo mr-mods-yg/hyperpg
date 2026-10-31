@@ -13,13 +13,13 @@ import * as $models from "./models.js";
  * CheckForUpdates checks the GitHub release channel selected in Settings.
  */
 export function CheckForUpdates(channel: string): $CancellablePromise<$models.UpdateInfo> {
-    return $Call.ByID(670986527, channel);
+    return $Call.ByID(3834212359, channel);
 }
 
 /**
- * InstallUpdate downloads and verifies the selected release, then installs it
- * and restarts the app after it has shut down.
+ * InstallUpdate downloads and verifies the selected release, starts the
+ * platform-specific update flow, then closes the app when that flow is ready.
  */
 export function InstallUpdate(channel: string): $CancellablePromise<void> {
-    return $Call.ByID(2153346210, channel);
+    return $Call.ByID(2545819674, channel);
 }
