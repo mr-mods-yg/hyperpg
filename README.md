@@ -37,12 +37,12 @@ Choose **Stable** or **Nightly** in Settings. Stable releases use version tags o
 - Select cells by clicking or dragging. Shift extends a range, Ctrl/Cmd toggles individual cells, and clicking a row number selects the row. Arrow keys move the active cell; Shift+arrow extends the selection. Ctrl/Cmd+A selects the current page.
 - Ctrl/Cmd+C or **Copy CSV** copies selected values as CSV with quoted commas, quotes, and line breaks. Disjoint selections retain their positions inside the selected rectangle; unselected fields and NULL values are empty. Column headers are omitted.
 - Double-click a cell or press Enter/F2 to edit. Enter finishes editing, Shift+Enter inserts a line break, and Escape cancels the current cell edit. Generated columns are read-only.
-- **Save changes** (Ctrl/Cmd+S) applies the draft in one transaction. **Discard changes** restores the loaded page. Navigation asks how to handle an unsaved draft.
+- **Save changes** applies the draft in one transaction. **Discard changes** restores the loaded page. Navigation asks how to handle an unsaved draft.
 - Right-click a cell to add a row above or below it, duplicate, delete or restore rows, set NULL, or revert cells. New rows use PostgreSQL defaults for untouched cells. Their position is temporary: after saving, rows are ordered by primary key, or by physical location when there is no primary key.
 
 ## Running SQL scripts
 
-Open a database and choose **New SQL script**. Type SQL, then select **Run script** or press Ctrl/Cmd+Enter. Select text to run only that portion. Results are shown for each statement, with the first 500 rows of each result displayed and available to copy as CSV. Include `COMMIT` when using an explicit transaction; an unfinished transaction is rolled back when execution ends.
+Open a database and choose **New SQL script**. Type SQL, then select **Run script**. Select text to run only that portion. Results are shown for each statement, with the first 500 rows of each result displayed and available to copy as CSV. Include `COMMIT` when using an explicit transaction; an unfinished transaction is rolled back when execution ends.
 
 ## Build from source
 
@@ -63,6 +63,8 @@ Build a production app with `wails3 build`.
 Run `npm test` and `npm run build` in `frontend`. Install the browser once with `npx playwright install chromium`, then run `npm run test:e2e` for grid and clipboard interaction checks. Browser tests replace the desktop IPC boundary with test fixtures.
 
 Set `HYPERPG_TEST_DATABASE_URL` to a disposable PostgreSQL database and run `go test -tags server ./...` after building the frontend. Integration tests create and remove their own schemas and cover exact values, mixed saves, rollback, concurrent changes, and duplicate/partitioned rows. Without the variable, PostgreSQL integration tests are skipped. The release workflow runs both suites against PostgreSQL before building release assets.
+
+Configure action shortcuts in Settings. Refresh defaults to F5 and closing the active tab defaults to Ctrl+W; other actions are unassigned.
 
 ## Release branches
 

@@ -241,3 +241,18 @@ test('delete from the context menu removes the branch and opens the next saved c
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('reports')
   expect((await state(page)).deleted).toEqual(['primary'])
 })
+
+test('a late connection open cannot replace a newly created script', async ({ page }) => {
+  const delayed = postgresFixture.replace('export async function OpenSavedConnection(id) {', "export async function OpenSavedConnection(id) { if (id === 'reporting') await new Promise(resolve => { window.finishOpen = resolve });")
+  await page.route('**/bindings/changeme/postgresservice.*', route => route.fulfill({ contentType: 'text/javascript', body: delayed }))
+  await page.reload()
+  await expect(connections(page).getByRole('button', { name: 'Select Development', exact: true })).toHaveAttribute('aria-expanded', 'true')
+  await connections(page).getByRole('button', { name: 'Select Reporting', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => typeof (window as any).finishOpen)).toBe('function')
+  await page.getByRole('button', { name: 'New SQL script' }).click()
+  await page.getByRole('textbox', { name: 'SQL script' }).fill('SELECT 1;')
+  await page.evaluate(() => (window as any).finishOpen())
+  await expect(page.getByRole('tab', { name: 'Script 1', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('textbox', { name: 'SQL script' })).toHaveValue('SELECT 1;')
+  await expect(page.locator('.breadcrumbs')).toContainText('Development')
+})

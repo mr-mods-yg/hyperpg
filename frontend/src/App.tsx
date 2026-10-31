@@ -8,7 +8,17 @@ import SqlEditor from './SqlEditor'
 
 type View = 'data' | 'structure'
 type Theme = 'light' | 'dark' | 'cream' | 'discord'
+type WorkspaceTab = { id: string; kind: 'table' | 'script'; connectionId: string; database: { id: string; name: string }; table?: TableInfo; title: string }
 type UpdateChannel = 'stable' | 'nightly'
+type ShortcutAction = 'refresh' | 'closeTab' | 'newScript' | 'runScript' | 'saveChanges' | 'settings'
+const shortcutLabels: Record<ShortcutAction, string> = { refresh: 'Refresh', closeTab: 'Close tab', newScript: 'New SQL script', runScript: 'Run script', saveChanges: 'Save table changes', settings: 'Open settings' }
+const defaultShortcuts: Record<ShortcutAction, string> = { refresh: 'F5', closeTab: 'Ctrl+W', newScript: '', runScript: '', saveChanges: '', settings: '' }
+function shortcutFromEvent(event: { key: string; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean }): string {
+  if (['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) return ''
+  const key = event.key.length === 1 ? event.key.toUpperCase() : event.key
+  return [event.ctrlKey && 'Ctrl', event.altKey && 'Alt', event.shiftKey && 'Shift', event.metaKey && 'Meta', key].filter(Boolean).join('+')
+}
+
 type UpdateInfo = { available: boolean; version: string; releaseUrl: string; installError?: string }
 type CachedTablePage = {
   databaseId: string
@@ -69,6 +79,7 @@ function App() {
   const [savedConnectionsError, setSavedConnectionsError] = useState('')
   const [openingConnectionId, setOpeningConnectionId] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
+  const [scriptRefreshPending, setScriptRefreshPending] = useState(false)
   const [pageSize, setPageSize] = useState(100)
   const [pageOffset, setPageOffset] = useState(0)
   const [connectionError, setConnectionError] = useState('')
@@ -82,6 +93,12 @@ function App() {
   const [connecting, setConnecting] = useState(false)
   const [view, setView] = useState<View>('data')
   const [showSql, setShowSql] = useState(false)
+  const [tabs, setTabs] = useState<WorkspaceTab[]>([])
+  const [activeTabId, setActiveTabId] = useState('')
+  const [scriptToClose, setScriptToClose] = useState<WorkspaceTab | null>(null)
+  const [runningScripts, setRunningScripts] = useState<Set<string>>(new Set())
+  const nextScriptId = useRef(0)
+  const tableTabState = useRef<Record<string, { offset: number; size: number; search: string; view: View }>>({})
   const [sqlDrafts, setSqlDrafts] = useState<Record<string, string>>({})
   const [rowSearch, setRowSearch] = useState('')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
@@ -95,6 +112,15 @@ function App() {
   })
   const [resizingSidebar, setResizingSidebar] = useState(false)
   const [showSettingsDialog, setShowSettingsDialog] = useState(false)
+  const [settingsCategory, setSettingsCategory] = useState<'appearance' | 'shortcuts' | 'updates'>('appearance')
+  const [recordingShortcut, setRecordingShortcut] = useState<ShortcutAction | null>(null)
+  const [shortcutError, setShortcutError] = useState('')
+  const [shortcuts, setShortcuts] = useState<Record<ShortcutAction, string>>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('hyperpg-shortcuts') || '{}')
+      return Object.fromEntries(Object.keys(defaultShortcuts).map((key) => [key, typeof saved[key] === 'string' ? saved[key] : defaultShortcuts[key as ShortcutAction]])) as Record<ShortcutAction, string>
+    } catch { return { ...defaultShortcuts } }
+  })
   const settingsDialogOpener = useRef<HTMLElement | null>(null)
   const [updateChannel, setUpdateChannel] = useState<UpdateChannel>(() => {
     try {
@@ -282,18 +308,19 @@ function App() {
   }
 
   useEffect(() => {
-    if (!showConnectionDialog && !showSettingsDialog) return
+    if (!showConnectionDialog && !showSettingsDialog && !scriptToClose) return
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      if (showSettingsDialog) setShowSettingsDialog(false)
+      if (event.key !== 'Escape' || recordingShortcut) return
+      if (scriptToClose) setScriptToClose(null)
+      else if (showSettingsDialog) setShowSettingsDialog(false)
       else if (!connecting) setShowConnectionDialog(false)
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [showConnectionDialog, showSettingsDialog, connecting])
+  }, [showConnectionDialog, showSettingsDialog, connecting, recordingShortcut, scriptToClose])
 
   useEffect(() => {
-    if (!showConnectionDialog && !showSettingsDialog) return
+    if (!showConnectionDialog && !showSettingsDialog && !scriptToClose) return
     const dialog = document.querySelector<HTMLElement>('.modal-backdrop [role="dialog"]')
     const backdrop = dialog?.closest<HTMLElement>('.modal-backdrop')
     if (!dialog || !backdrop) return
@@ -329,11 +356,11 @@ function App() {
     return () => {
       document.removeEventListener('keydown', keepFocusInDialog)
       siblings.forEach((element, index) => { element.inert = priorInertStates[index] })
-      const opener = showSettingsDialog ? settingsDialogOpener.current : connectionDialogOpener.current
+      const opener = showSettingsDialog ? settingsDialogOpener.current : showConnectionDialog ? connectionDialogOpener.current : previouslyFocused
       if (opener?.isConnected) opener.focus()
       else previouslyFocused?.focus()
     }
-  }, [showConnectionDialog, showSettingsDialog])
+  }, [showConnectionDialog, showSettingsDialog, scriptToClose])
 
   const pageStart = tableData?.rows.length ? pageOffset + 1 : 0
   const pageEnd = tableData ? Math.min(pageOffset + tableData.rows.length, tableData.rowCount) : 0
@@ -494,6 +521,7 @@ function App() {
 
   const openSettingsDialog = () => {
     settingsDialogOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setSettingsCategory('appearance')
     setShowSettingsDialog(true)
   }
 
@@ -540,6 +568,9 @@ function App() {
       connectionSelection.current++
       setConnections((current) => editingConnectionId ? current.map((item) => item.id === connection.id ? connection : item) : [connection, ...current])
       setConnectionRevisions((current) => ({ ...current, [connection.id]: (current[connection.id] ?? 0) + 1 }))
+      if (editingConnectionId) setTabs((current) => current.filter((tab) => tab.connectionId !== editingConnectionId))
+      setActiveTabId('')
+      setShowSql(false)
       setSelectedConnectionId(connection.id)
       setSelectedDatabase({ name: connection.database, id: connection.id })
       setSelectedTable(null)
@@ -567,6 +598,8 @@ function App() {
     try {
       const info = await PostgresService.OpenSavedConnection(connectionId)
       if (request !== connectionSelection.current) return
+      setActiveTabId('')
+      setShowSql(false)
       setSelectedConnectionId(connectionId)
       setSelectedDatabase({ name: info.database, id: connectionId })
       setSelectedTable(null)
@@ -597,13 +630,15 @@ function App() {
     try {
       const handle = await PostgresService.OpenDatabase(connection.id, database)
       if (request !== connectionSelection.current) return
+      const db = { name: database, id: handle }
       setSelectedConnectionId(connection.id)
-      setSelectedDatabase({ name: database, id: handle })
+      setSelectedDatabase(db)
+      setShowSql(false)
+      if (table) openTableTab(connection.id, db, table)
+      else setActiveTabId('')
       setSelectedTable(table ?? null)
       setTableData(null)
-      setPageOffset(0)
-      setRowSearch('')
-      setView('data')
+      if (!table) { setPageOffset(0); setRowSearch(''); setView('data') }
       setMobileNavOpen(false)
     } catch (error) {
       if (request === connectionSelection.current) setSavedConnectionsError(errorMessage(error, 'Could not open this database.'))
@@ -624,6 +659,8 @@ function App() {
     connectionSelection.current++
     setOpeningConnectionId('')
     setSavedConnectionsError('')
+    setTabs((current) => current.filter((tab) => tab.connectionId !== connection.id))
+    if (selectedConnectionId === connection.id) { setActiveTabId(''); setShowSql(false) }
     const remaining = connections.filter((item) => item.id !== connection.id)
     setConnections((current) => current.filter((item) => item.id !== connection.id))
     if (selectedConnectionId === connection.id) {
@@ -636,15 +673,108 @@ function App() {
     }
   }
 
-  const selectTable = (table: TableInfo) => guardNavigation(() => showTable(table))
+  useLayoutEffect(() => {
+    if (activeTabId && !showSql && selectedTable) tableTabState.current[activeTabId] = { offset: pageOffset, size: pageSize, search: rowSearch, view }
+  }, [activeTabId, showSql, selectedTable, pageOffset, pageSize, rowSearch, view])
 
-  const showTable = (table: TableInfo) => {
-    setShowSql(false)
-    setSelectedTable(table)
-    setPageOffset(0)
-    setRowSearch('')
-    setView('data')
+  useEffect(() => {
+    if (!scriptRefreshPending || hasPendingChanges || savingChanges || pendingNavigation) return
+    setScriptRefreshPending(false)
+    setRefreshKey((value) => value + 1)
+  }, [scriptRefreshPending, hasPendingChanges, savingChanges, pendingNavigation])
+
+  const activateTab = (tab: WorkspaceTab) => {
+    connectionSelection.current++
+    setOpeningConnectionId('')
+    if (activeTabId === tab.id) return
+    const saved = tableTabState.current[tab.id]
+    setSelectedConnectionId(tab.connectionId)
+    setSelectedDatabase(tab.database)
+    setSelectedTable(tab.table ?? null)
+    setShowSql(tab.kind === 'script')
+    setActiveTabId(tab.id)
+    setPageOffset(saved?.offset ?? 0)
+    setPageSize(saved?.size ?? 100)
+    setRowSearch(saved?.search ?? '')
+    setView(saved?.view ?? 'data')
     setMobileNavOpen(false)
+  }
+
+  const openTableTab = (connectionId: string, database: { id: string; name: string }, table: TableInfo) => {
+    const existing = tabs.find((tab) => tab.kind === 'table' && tab.connectionId === connectionId && tab.database.name === database.name && tab.table?.schema === table.schema && tab.table.name === table.name)
+    const tab: WorkspaceTab = existing ?? { id: crypto.randomUUID(), kind: 'table', connectionId, database, table, title: table.name }
+    if (!existing) setTabs((current) => [...current, tab])
+    activateTab(tab)
+  }
+
+  const selectTable = (table: TableInfo) => guardNavigation(() => showTable(table))
+  const showTable = (table: TableInfo) => openTableTab(selectedConnectionId, selectedDatabase, table)
+  const newScript = () => guardNavigation(() => {
+    const number = ++nextScriptId.current
+    const tab: WorkspaceTab = { id: crypto.randomUUID(), kind: 'script', connectionId: selectedConnectionId, database: selectedDatabase, title: `Script ${number}` }
+    setTabs((current) => [...current, tab])
+    activateTab(tab)
+  })
+  const closeTab = (tab: WorkspaceTab, confirmed = false) => {
+    if (runningScripts.has(tab.id)) return
+    if (tab.kind === 'script' && sqlDrafts[tab.id]?.trim() && !confirmed) { setScriptToClose(tab); return }
+    const close = () => {
+      const index = tabs.findIndex((item) => item.id === tab.id)
+      const remaining = tabs.filter((item) => item.id !== tab.id)
+      setTabs(remaining)
+      delete tableTabState.current[tab.id]
+      setSqlDrafts((drafts) => { const next = { ...drafts }; delete next[tab.id]; return next })
+      if (activeTabId === tab.id) {
+        const next = remaining[Math.min(index, remaining.length - 1)]
+        if (next) activateTab(next)
+        else { setActiveTabId(''); setShowSql(false); setSelectedTable(null) }
+      }
+    }
+    if (activeTabId === tab.id) guardNavigation(close)
+    else close()
+  }
+
+  useEffect(() => {
+    document.getElementById(`workspace-tab-${activeTabId}`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [activeTabId])
+
+  useEffect(() => {
+    try { localStorage.setItem('hyperpg-shortcuts', JSON.stringify(shortcuts)) } catch { /* Settings remain available for this session. */ }
+  }, [shortcuts])
+
+  useEffect(() => {
+    const onShortcut = (event: KeyboardEvent) => {
+      if (event.isComposing) return
+      const pressed = shortcutFromEvent(event)
+      const action = (Object.keys(shortcutLabels) as ShortcutAction[]).find((key) => shortcuts[key] && shortcuts[key] === pressed)
+      if (!action) return
+      event.preventDefault()
+      if (showSettingsDialog || showConnectionDialog || pendingNavigation || scriptToClose || event.repeat) return
+      if (action === 'refresh' && !activeConnection || action === 'closeTab' && !activeTabId || action === 'newScript' && !activeConnection || action === 'runScript' && !showSql || action === 'saveChanges' && (showSql || !selectedTable || !hasPendingChanges || savingChanges)) return
+      if (action === 'refresh') guardNavigation(() => setRefreshKey((value) => value + 1))
+      else if (action === 'closeTab') { const tab = tabs.find((item) => item.id === activeTabId); if (tab) closeTab(tab) }
+      else if (action === 'newScript') newScript()
+      else if (action === 'saveChanges') void gridRef.current?.save()
+      else if (action === 'runScript') window.dispatchEvent(new Event('hyperpg-run-script'))
+      else openSettingsDialog()
+    }
+    window.addEventListener('keydown', onShortcut, true)
+    return () => window.removeEventListener('keydown', onShortcut, true)
+  })
+
+  const recordShortcut = (event: ReactKeyboardEvent<HTMLButtonElement>, action: ShortcutAction) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.key === 'Escape') { setRecordingShortcut(null); setShortcutError(''); return }
+    const value = shortcutFromEvent(event)
+    if (!value) return
+    if (!event.ctrlKey && !event.altKey && !event.metaKey && !/^F([1-9]|1[0-2])$/.test(event.key)) { setShortcutError('Use a modifier or a function key.'); return }
+    if ((event.ctrlKey || event.metaKey) && ['a', 'c', 'v', 'x', 'z', 'y'].includes(event.key.toLowerCase())) { setShortcutError('Reserved for text editing.'); return }
+    const conflict = (Object.keys(shortcutLabels) as ShortcutAction[]).find((key) => key !== action && shortcuts[key] === value)
+    if (conflict) { setShortcutError(`${value} is assigned to ${shortcutLabels[conflict]}.`); return }
+    setShortcuts((current) => ({ ...current, [action]: value }))
+    setRecordingShortcut(null)
+    setShortcutError('')
   }
 
   return (
@@ -711,14 +841,19 @@ function App() {
             {activeConnection ? <><span className="crumb-muted">{activeConnection.name}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className={selectedTable ? 'crumb-muted' : 'crumb-current'}>{selectedDatabase.name}</span>{selectedTable ? <><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-muted">{selectedTable.schema}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-current">{selectedTable.name}</span></> : null}</> : null}
           </div>
           <div className="topbar-right">
-            {activeConnection ? <button className="topbar-add" type="button" onClick={() => guardNavigation(() => setShowSql((value) => !value))}>{showSql ? 'Database' : 'New SQL script'}</button> : null}
+            {activeConnection ? <button className="topbar-add" type="button" onClick={newScript}>New SQL script</button> : null}
             <button className="topbar-add" type="button" onClick={openConnectionDialog}><Icon name="plus" /> Add connection</button>
           </div>
         </header>
 
         {activeConnection ? (
           <div className="content-area">
-            {showSql ? <SqlEditor key={selectedDatabase.id} databaseId={selectedDatabase.id} databaseName={selectedDatabase.name} script={sqlDrafts[selectedDatabase.id] ?? ''} onScriptChange={(script) => setSqlDrafts((drafts) => ({ ...drafts, [selectedDatabase.id]: script }))} onExecuted={() => setRefreshKey((value) => value + 1)} /> : <>
+            {tabs.length ? <div className="editor-tab-bar" role="tablist" aria-label="Open workspaces" onKeyDown={handleTableViewKeyDown}>{tabs.map((tab) => <div className={`editor-tab ${activeTabId === tab.id ? 'is-active' : ''}`} key={tab.id}>
+              <button type="button" className="editor-tab-select" role="tab" id={`workspace-tab-${tab.id}`} aria-controls={`workspace-panel-${tab.id}`} aria-selected={activeTabId === tab.id} tabIndex={activeTabId === tab.id || (!activeTabId && tabs[0]?.id === tab.id) ? 0 : -1} aria-current={activeTabId === tab.id ? 'page' : undefined} title={`${tab.database.name}${tab.table ? ` · ${tab.table.schema}` : ''}`} onClick={() => { if (activeTabId !== tab.id) guardNavigation(() => activateTab(tab)) }}><Icon name={tab.kind === 'table' ? 'table' : 'edit'} /><span>{tab.title}</span></button>
+              <button type="button" className="editor-tab-close" disabled={runningScripts.has(tab.id)} aria-label={`Close ${tab.title}`} onClick={() => closeTab(tab)}>×</button>
+            </div>)}</div> : null}
+            {tabs.filter((tab) => tab.kind === 'script').map((tab) => <div key={tab.id} className="script-tab-panel" id={`workspace-panel-${tab.id}`} role="tabpanel" aria-labelledby={`workspace-tab-${tab.id}`} hidden={activeTabId !== tab.id}><SqlEditor onRunningChange={(running) => setRunningScripts((current) => { const next = new Set(current); if (running) next.add(tab.id); else next.delete(tab.id); return next })} active={activeTabId === tab.id && !showSettingsDialog} databaseId={tab.database.id} databaseName={tab.database.name} script={sqlDrafts[tab.id] ?? ''} onScriptChange={(script) => setSqlDrafts((drafts) => ({ ...drafts, [tab.id]: script }))} onExecuted={() => setScriptRefreshPending(true)} /></div>)}
+            {!showSql ? <>
             {!selectedTable ? <section className="database-header">
               <div>
                 <h1>{selectedDatabase.name}</h1>
@@ -731,7 +866,7 @@ function App() {
 
             {savedConnectionsError ? <div className="notice notice-error compact-notice" role="alert">{savedConnectionsError}</div> : null}
 
-            <section className={`workspace-section ${selectedTable ? 'has-selected-table' : ''}`}>
+            <section id={activeTabId ? `workspace-panel-${activeTabId}` : undefined} role={activeTabId ? 'tabpanel' : undefined} aria-labelledby={activeTabId ? `workspace-tab-${activeTabId}` : undefined} className={`workspace-section ${selectedTable ? 'has-selected-table' : ''}`}>
               <div className="workspace-tabs">
                 {selectedTable ? <div className="workspace-identity">
                   <span className="workspace-table-icon"><Icon name="table" /></span>
@@ -838,7 +973,7 @@ function App() {
                 </div>
               )}
             </section>
-            </> }
+            </> : null }
           </div>
         ) : (
           <div className="welcome-area">
@@ -866,6 +1001,14 @@ function App() {
         <button className="update-now-button" type="button" onClick={() => guardNavigation(() => { void handleInstallUpdate() })} disabled={installingUpdate || !updateInfo.available}>{installingUpdate ? <><span className="button-spinner" />{updateRestarting ? 'Opening installer…' : 'Updating…'}</> : updateInfo.available ? 'Update now' : 'Update unavailable'}</button>
         <button className="update-dismiss" type="button" aria-label="Dismiss update notice" onClick={() => setDismissedUpdate(updateInfo.version || 'update-error')}><svg viewBox="0 0 18 18" fill="none"><path d="m4 4 10 10M14 4 4 14" /></svg></button>
       </aside> : null}
+
+      {scriptToClose ? <div className="modal-backdrop" role="presentation">
+        <section className="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="close-script-title">
+          <div className="dialog-heading"><h2 id="close-script-title">Close {scriptToClose.title}?</h2></div>
+          <p>The script and results will be discarded.</p>
+          <div className="dialog-actions"><button type="button" className="cancel-button" autoFocus onClick={() => setScriptToClose(null)}>Keep editing</button><button type="button" className="connect-button" onClick={() => { closeTab(scriptToClose, true); setScriptToClose(null) }}>Close script</button></div>
+        </section>
+      </div> : null}
 
       {pendingNavigation ? <div className="modal-backdrop" role="presentation">
         <section className="connection-dialog unsaved-dialog" role="dialog" aria-modal="true" aria-labelledby="unsaved-title" onKeyDown={(event) => {
@@ -910,11 +1053,14 @@ function App() {
         </section>
       </div> : null}
 
-      {showSettingsDialog ? <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowSettingsDialog(false) }}>
-        <section className="connection-dialog settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      {showSettingsDialog ? <div className="modal-backdrop settings-page-backdrop" role="presentation">
+        <section className="connection-dialog settings-dialog settings-page" role="dialog" aria-modal="true" aria-labelledby="settings-title">
           <button className="dialog-close" type="button" aria-label="Close settings" onClick={() => setShowSettingsDialog(false)}><svg viewBox="0 0 18 18" fill="none"><path d="m4 4 10 10M14 4 4 14" /></svg></button>
           <div className="dialog-heading"><h2 id="settings-title">Settings</h2></div>
-          <div className="settings-section">
+          <div className="settings-layout"><nav className="settings-nav" aria-label="Settings categories">
+            {(['appearance', 'shortcuts', 'updates'] as const).map((category) => <button type="button" key={category} className={settingsCategory === category ? 'is-active' : ''} aria-current={settingsCategory === category ? 'page' : undefined} onClick={() => { setSettingsCategory(category); setRecordingShortcut(null); setShortcutError('') }}>{category === 'appearance' ? 'Appearance' : category === 'shortcuts' ? 'Keyboard shortcuts' : 'Updates'}</button>)}
+          </nav><div className="settings-content">
+          <div hidden={settingsCategory !== 'appearance'}><div className="settings-section">
             <span className="field-label">Appearance</span>
             <div className="theme-options" role="radiogroup" aria-label="Color theme">
               <button className={`theme-option ${theme === 'light' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={theme === 'light'} tabIndex={theme === 'light' ? 0 : -1} onKeyDown={(event) => handleRadioGroupKeyDown(event, themeValues, theme, setTheme)} onClick={() => setTheme('light')}>
@@ -947,15 +1093,20 @@ function App() {
             </div>
             <div className="font-size-range-labels" aria-hidden="true"><span>{MIN_FONT_SIZE_PX} px</span><span>{MAX_FONT_SIZE_PX} px</span></div>
           </div>
-          <div className="settings-section update-settings-section">
+          </div>
+          <div hidden={settingsCategory !== 'shortcuts'} className="shortcut-settings"><h3>Keyboard shortcuts</h3>
+            {(Object.keys(shortcutLabels) as ShortcutAction[]).map((action) => <div className="shortcut-row" key={action}><span>{shortcutLabels[action]}</span><div><button type="button" className="shortcut-key" onClick={() => { setRecordingShortcut(action); setShortcutError('') }} onKeyDown={(event) => { if (recordingShortcut === action) recordShortcut(event, action) }} onBlur={() => setRecordingShortcut(null)} aria-label={`Set shortcut for ${shortcutLabels[action]}`}>{recordingShortcut === action ? 'Press keys…' : shortcuts[action] || 'Not set'}</button><button type="button" className="shortcut-clear" disabled={!shortcuts[action]} aria-label={`Clear shortcut for ${shortcutLabels[action]}`} onClick={() => { setShortcuts((current) => ({ ...current, [action]: '' })); setShortcutError('') }}>Clear</button></div></div>)}
+            {shortcutError ? <p role="alert">{shortcutError}</p> : null}<button type="button" className="shortcut-clear" onClick={() => { setShortcuts({ ...defaultShortcuts }); setShortcutError('') }}>Reset defaults</button>
+          </div>
+          <div hidden={settingsCategory !== 'updates'}><div className="settings-section update-settings-section">
             <span className="field-label">Update channel</span>
             <div className="theme-options update-channel-options" role="radiogroup" aria-label="Update channel">
               <button className={`theme-option ${updateChannel === 'stable' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={updateChannel === 'stable'} tabIndex={updateChannel === 'stable' ? 0 : -1} onKeyDown={(event) => handleRadioGroupKeyDown(event, updateChannelValues, updateChannel, setUpdateChannel)} onClick={() => setUpdateChannel('stable')}>
-                <span className="theme-option-copy"><strong>Stable</strong><small>Tested releases</small></span>
+                <span className="theme-option-copy"><strong>Stable</strong></span>
                 <span className="theme-radio" />
               </button>
               <button className={`theme-option ${updateChannel === 'nightly' ? 'is-selected' : ''}`} type="button" role="radio" aria-checked={updateChannel === 'nightly'} tabIndex={updateChannel === 'nightly' ? 0 : -1} onKeyDown={(event) => handleRadioGroupKeyDown(event, updateChannelValues, updateChannel, setUpdateChannel)} onClick={() => setUpdateChannel('nightly')}>
-                <span className="theme-option-copy"><strong>Nightly</strong><small>Latest daily build</small></span>
+                <span className="theme-option-copy"><strong>Nightly</strong></span>
                 <span className="theme-radio" />
               </button>
             </div>
@@ -964,7 +1115,7 @@ function App() {
               <button className="update-check-button" type="button" disabled={checkingUpdates || installingUpdate} onClick={() => setUpdateRefreshKey((key) => key + 1)}>{checkingUpdates ? 'Checking' : 'Check now'}</button>
             </div>
           </div>
-          <div className="dialog-actions"><button className="connect-button settings-done" type="button" onClick={() => setShowSettingsDialog(false)}>Done</button></div>
+          </div></div></div>
         </section>
       </div> : null}
     </div>

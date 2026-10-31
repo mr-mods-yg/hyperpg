@@ -297,7 +297,6 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
   function keyDown(event: KeyboardEvent<HTMLDivElement>) {
     if ((event.target as HTMLElement).closest('textarea, input, button, [role="menu"]')) return
     const command = event.ctrlKey || event.metaKey
-    if (command && event.key.toLowerCase() === 's') { event.preventDefault(); void save(); return }
     if (saving) return
     if (command && event.key.toLowerCase() === 'a') {
       event.preventDefault()
@@ -383,7 +382,6 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
                   onChange={(event) => setEditor({ ...editor, text: event.target.value, touched: true })} onBlur={commitEditor} onKeyDown={(event) => {
                     event.stopPropagation()
                     if (event.key === 'Escape') { event.preventDefault(); setEditor(null); focusCell(position) }
-                    else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); void save() }
                     else if ((event.key === 'Enter' && !event.shiftKey) || event.key === 'Tab') {
                       event.preventDefault(); commitEditor()
                       const next = event.key === 'Tab' ? { row: rowIndex, column: Math.max(0, Math.min(data.columns.length - 1, columnIndex + (event.shiftKey ? -1 : 1))) } : position

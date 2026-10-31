@@ -4,6 +4,22 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- Table and SQL script tabs with separate drafts and results.
+- Full-screen settings with appearance, shortcut, and update categories.
+- Configurable action shortcuts, with F5 for refresh and Ctrl+W for closing tabs.
+- Expand SQL results to focus on query output.
+
+### Changed
+
+- Refine tabs, settings, and SQL controls across themes.
+
+### Fixed
+
+- Preserve table view settings and prevent late database opens from replacing newer navigation.
+- Protect unsaved edits when background SQL finishes, and confirm before discarding scripts.
+
 ## [1.0.9] - 2026-10-30
 
 ### Added

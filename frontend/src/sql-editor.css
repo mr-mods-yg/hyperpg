@@ -22,3 +22,21 @@
 .sql-message { padding: 12px 0; }
 
 .sql-result-actions { display: flex; align-items: center; gap: 12px; }
+
+.sql-editor { background: var(--input-surface); border-color: var(--line); }
+.sql-editor:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--focus-halo); }
+.sql-button { background: var(--white); transition: background .15s ease, border-color .15s ease; }
+.sql-button:not(:disabled):hover { background: var(--control-hover); }
+.sql-run { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sql-run:not(:disabled):hover { background: var(--accent); filter: brightness(1.08); }
+.sql-result { background: var(--white); border-color: var(--line); }
+.sql-table-wrap th { background: var(--surface-raised); }
+.sql-divider { position: relative; }
+.sql-divider::after { display: block; width: 36px; height: 3px; margin: 2px auto; border-radius: 4px; background: var(--line-strong); content: ''; }
+.sql-divider:hover, .sql-divider:focus-visible { background: transparent; }
+.sql-divider:hover::after, .sql-divider:focus-visible::after { background: var(--accent); }
+.sql-heading { flex: none; }
+.sql-heading[hidden], .sql-divider[hidden] { display: none; }
+.sql-focus-button { width: 28px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 5px; background: var(--white); color: var(--ink); cursor: pointer; font-size: 18px; }
+.sql-focus-button:hover { background: var(--control-hover); }
+.editor-tab-close:disabled { opacity: .35; cursor: default; }
