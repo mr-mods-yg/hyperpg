@@ -142,3 +142,64 @@ test('formats SQL, completes schema names, and runs the statement at the cursor'
   await page.keyboard.press('Control+Space')
   await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('customers')
 })
+
+for (const theme of ['light', 'dark', 'cream', 'discord']) {
+  test(`SQL controls stay aligned and readable in the ${theme} theme`, async ({ page }) => {
+    await page.addInitScript((theme) => localStorage.setItem('hyperpg-theme', theme), theme)
+    await page.route('**/bindings/changeme/internal/database/postgresservice.*', route => route.fulfill({ contentType: 'text/javascript', body: postgresFixture }))
+    await page.route('**/bindings/changeme/internal/updates/updateservice.*', route => route.fulfill({ contentType: 'text/javascript', body: 'export async function CheckForUpdates() { return { available: false } }' }))
+    await page.goto('/')
+    await page.getByRole('button', { name: 'New SQL script' }).click()
+    const run = page.getByRole('button', { name: 'Run script', exact: true })
+    await expect(run).toBeDisabled()
+    await page.getByRole('textbox', { name: 'SQL script' }).fill('SELECT 1;')
+    await expect(run).toBeEnabled()
+    await run.focus()
+    await page.keyboard.press('Shift+Tab')
+    await expect(page.getByRole('button', { name: 'Run statement' })).toBeFocused()
+    await expect(page.getByRole('button', { name: 'Run statement' })).toHaveCSS('outline-style', 'solid')
+    await run.click()
+    await expect(page.getByRole('cell', { name: 'hello' })).toBeVisible()
+
+    const controls = page.locator('.topbar-right button, .script-file-actions button, .sql-actions button, .sql-result-actions button, .export-menu summary')
+    const styles = await controls.evaluateAll((elements) => elements.map((element) => {
+      const style = getComputedStyle(element)
+      return { height: element.getBoundingClientRect().height, fontSize: style.fontSize, radius: style.borderRadius }
+    }))
+    expect(styles.length).toBeGreaterThan(10)
+    for (const style of styles) expect(style).toEqual({ height: 32, fontSize: '12px', radius: '6px' })
+
+    const contrast = await run.evaluate((element) => {
+      const style = getComputedStyle(element)
+      const workspace = getComputedStyle(document.querySelector('.sql-workspace')!)
+      const surface = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim()
+      const canvas = document.createElement('canvas').getContext('2d')!
+      function rgb(color: string) {
+        canvas.fillStyle = color
+        canvas.fillRect(0, 0, 1, 1)
+        return Array.from(canvas.getImageData(0, 0, 1, 1).data).slice(0, 3)
+      }
+      // Composite translucent theme colors over the workspace surface.
+      canvas.fillStyle = surface
+      canvas.fillRect(0, 0, 1, 1)
+      const background = rgb(style.backgroundColor)
+      canvas.clearRect(0, 0, 1, 1)
+      const foreground = rgb(style.color || workspace.color)
+      function luminance(values: number[]) {
+        return values.map(value => value / 255).map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4).reduce((sum, value, i) => sum + value * [.2126, .7152, .0722][i], 0)
+      }
+      const [low, high] = [luminance(background), luminance(foreground)].sort((a, b) => a - b)
+      return (high + .05) / (low + .05)
+    })
+    expect(contrast).toBeGreaterThanOrEqual(4.5)
+
+    for (const width of [900, 560, 390]) {
+      await page.setViewportSize({ width, height: 900 })
+      const overflowing = await controls.evaluateAll((elements) => elements.filter((element) => {
+        const rect = element.getBoundingClientRect()
+        return rect.left < 0 || rect.right > window.innerWidth
+      }).map((element) => element.textContent))
+      expect(overflowing).toEqual([])
+    }
+  })
+}

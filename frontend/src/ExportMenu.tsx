@@ -1,6 +1,8 @@
+import Button, { buttonClassName } from './ui/Button'
 import { useRef, useState } from 'react'
 import { PostgresService } from './services'
 import { exportData, type ExportFormat } from './export-data'
+import Icon from './Icon'
 import type { TableQueryOptions } from './table-query'
 import './feature-panels.css'
 
@@ -28,10 +30,10 @@ export default function ExportMenu({ columns, rows, selectedRows, table, generat
     finally { setBusy(false) }
   }
   return <details className="export-menu" ref={menuRef} onKeyDown={(event) => { if (event.key === 'Escape' && menuRef.current) { menuRef.current.open = false; menuRef.current.querySelector('summary')?.focus(); event.stopPropagation() } }}>
-    <summary className="pagination-button">Export</summary>
+    <summary className={buttonClassName()}><Icon name="download" />Export</summary>
     <div className="export-menu-panel"><label>Format<select aria-label="Export format" value={format} disabled={busy} onChange={(event) => setFormat(event.target.value as ExportFormat)}><option value="csv">CSV</option><option value="json">JSON</option>{table ? <option value="sql">SQL inserts</option> : null}</select></label>
       <label>Rows<select aria-label="Export rows" value={scope} disabled={busy} onChange={(event) => setScope(event.target.value)}><option value="loaded">Loaded rows</option>{selectedRows ? <option value="selected" disabled={!selectedRows.length}>Selected rows</option> : null}{table ? <option value="table">Entire filtered table</option> : null}</select></label>
-      {error ? <span role="alert">{error}</span> : null}<button className="pagination-button" type="button" disabled={busy || scope === 'selected' && !selectedRows?.length} onClick={() => void save()}>{busy ? 'Exporting…' : 'Save file'}</button>
+      {error ? <span role="alert">{error}</span> : null}<Button variant="primary" type="button" disabled={busy || scope === 'selected' && !selectedRows?.length} onClick={() => void save()}>{busy ? 'Exporting…' : 'Save file'}</Button>
     </div>
   </details>
 }

@@ -1,7 +1,11 @@
-type IconName = 'plus' | 'copy' | 'table' | 'search' | 'lock' | 'chevron-left' | 'chevron-right' | 'chevrons-left' | 'chevrons-right' | 'edit' | 'null' | 'undo' | 'row-above' | 'row-below' | 'duplicate' | 'trash' | 'restore'
+type IconName = 'plus' | 'copy' | 'table' | 'search' | 'lock' | 'chevron-left' | 'chevron-right' | 'chevrons-left' | 'chevrons-right' | 'edit' | 'null' | 'undo' | 'row-above' | 'row-below' | 'duplicate' | 'trash' | 'restore' | 'play' | 'expand' | 'collapse' | 'download'
 
 export default function Icon({ name, className = '' }: { name: IconName; className?: string }) {
   const paths = {
+    play: <path d="m7 4 9 6-9 6V4Z" />,
+    expand: <><path d="M12 3h5v5M8 17H3v-5M17 3l-5 5M3 17l5-5" /></>,
+    collapse: <><path d="M17 8h-5V3M3 12h5v5M12 8l5-5M8 12l-5 5" /></>,
+    download: <><path d="M10 3v9m-4-4 4 4 4-4M4 13v4h12v-4" /></>,
     plus: <path d="M10 4v12M4 10h12" />,
     copy: <><rect x="7" y="7" width="10" height="10" rx="2" /><path d="M13 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" /></>,
     table: <><rect x="3" y="3.5" width="14" height="13" rx="2" /><path d="M3 8h14M8 8v8.5" /></>,

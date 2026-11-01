@@ -1,3 +1,4 @@
+import Button from './ui/Button'
 import { useEffect, useRef, useState } from 'react'
 import { PostgresService } from './services'
 import './feature-panels.css'
@@ -25,7 +26,7 @@ export default function TableDetails({ databaseId, schema, table, onScript }: { 
     finally { if (mounted.current) setGenerating(false) }
   }
   return <section className="table-details" aria-label="Table metadata">
-    <div className="generated-sql-actions">{['SELECT', 'INSERT', 'UPDATE', 'DDL'].map((kind) => <button className="pagination-button" type="button" key={kind} disabled={generating} onClick={() => void generate(kind)}>Generate {kind}</button>)}</div>
+    <div className="generated-sql-actions">{['SELECT', 'INSERT', 'UPDATE', 'DDL'].map((kind) => <Button type="button" key={kind} disabled={generating} onClick={() => void generate(kind)}>Generate {kind}</Button>)}</div>
     {error ? <div role="alert" className="notice notice-error">{error}</div> : null}
     {metadata ? <><h3>Constraints</h3>{metadata.constraints.length ? <table className="structure-table"><thead><tr><th>Name</th><th>Type</th><th>Definition</th></tr></thead><tbody>{metadata.constraints.map((item) => <tr key={item.name}><td>{item.name}</td><td>{item.type}</td><td><code>{item.definition}</code></td></tr>)}</tbody></table> : <span className="structure-empty">—</span>}
       <h3>Indexes</h3>{metadata.indexes.length ? <table className="structure-table"><tbody>{metadata.indexes.map((item) => <tr key={item.name}><td>{item.name}</td><td><code>{item.definition}</code></td></tr>)}</tbody></table> : <span className="structure-empty">—</span>}

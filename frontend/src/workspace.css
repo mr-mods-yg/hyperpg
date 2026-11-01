@@ -1,11 +1,15 @@
-.script-file-actions { display: flex; gap: 8px; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--line); }
-.script-file-actions button, .history-entry > button:last-child { background: transparent; border: 1px solid var(--line); border-radius: 4px; padding: 4px 9px; color: inherit; cursor: pointer; }
-.script-file-actions span { opacity: .65; }
+.script-file-actions { display: flex; flex: none; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 24px; background: var(--paper); border-bottom: 1px solid var(--line); }
+.script-save-status { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; color: var(--muted); font-size: calc(11px * var(--font-scale, 1)); }
+.script-save-status.is-dirty::before { width: 5px; height: 5px; flex: none; background: var(--muted); border-radius: 50%; content: ''; }
 .history-dialog { width: min(680px, 90vw); }
 .history-list { max-height: 45vh; overflow: auto; margin: 12px 0; }
 .history-entry { display: flex; gap: 8px; align-items: center; border-bottom: 1px solid var(--line); padding: 8px 0; }
 .history-open { flex: 1; text-align: left; background: transparent; border: 0; color: inherit; min-width: 0; cursor: pointer; }
 .history-open code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.history-open small { display: block; margin-top: 4px; opacity: .65; }
+.history-open small { display: block; margin-top: 4px; color: var(--muted); }
 .script-tab-panel:not([hidden]) { display: flex; flex-direction: column; min-height: 0; }
 .script-tab-panel > .sql-workspace { flex: 1; min-height: 0; height: auto; }
+
+@media (max-width: 560px) {
+  .script-file-actions { padding-inline: 12px; }
+}

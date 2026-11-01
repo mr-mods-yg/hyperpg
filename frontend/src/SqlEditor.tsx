@@ -1,3 +1,4 @@
+import Button from './ui/Button'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { PostgresService } from './services'
 import { EditorState, Compartment } from '@codemirror/state'
@@ -10,6 +11,7 @@ import { tags } from '@lezer/highlight'
 import { currentStatement } from './sql-statements'
 export { currentStatement } from './sql-statements'
 import ExportMenu from './ExportMenu'
+import Icon from './Icon'
 import './sql-editor.css'
 
 const sqlHighlighting = HighlightStyle.define([
@@ -156,22 +158,23 @@ export default function SqlEditor({ onRunningChange, active, databaseId, databas
   return <section className="sql-workspace" ref={workspaceRef}>
     <div className="sql-source" ref={sourceRef} aria-hidden={resultsFocused || undefined}>
     <div className="sql-heading"><div><h1>SQL editor</h1><span>{databaseName}</span></div><div className="sql-actions">
-      <button className="sql-button" type="button" disabled={running || !script} onClick={() => { onScriptChange(''); setSelection({ start: 0, end: 0 }); viewRef.current?.focus() }}>Clear</button>
-      <button className="sql-button" type="button" disabled={running || !script.trim()} onClick={() => { void import('sql-formatter').then(({ format }) => { if (viewRef.current?.state.doc.toString() !== script) return; onScriptChange(format(script, { language: 'postgresql', keywordCase: 'upper' })); setFormatError('') }).catch((cause: unknown) => setFormatError(cause instanceof Error ? cause.message : String(cause))) }}>Format</button>
-      <button className="sql-button" type="button" disabled={!databaseId || running || !script.trim()} onClick={() => void run(currentStatement(script, viewRef.current?.state.selection.main.head ?? 0))}>Run statement</button>
-      <button className="sql-button sql-run" type="button" onClick={() => void run()} disabled={!databaseId || running || !sqlToRun.trim()}>{running ? 'Running…' : selected ? 'Run selection' : 'Run script'}</button>
+      <Button type="button" disabled={running || !script} onClick={() => { onScriptChange(''); setSelection({ start: 0, end: 0 }); viewRef.current?.focus() }}>Clear</Button>
+      <Button type="button" disabled={running || !script.trim()} onClick={() => { void import('sql-formatter').then(({ format }) => { if (viewRef.current?.state.doc.toString() !== script) return; onScriptChange(format(script, { language: 'postgresql', keywordCase: 'upper' })); setFormatError('') }).catch((cause: unknown) => setFormatError(cause instanceof Error ? cause.message : String(cause))) }}>Format</Button>
+      <Button type="button" disabled={!databaseId || running || !script.trim()} onClick={() => void run(currentStatement(script, viewRef.current?.state.selection.main.head ?? 0))}>Run statement</Button>
+      <Button variant="primary" type="button" onClick={() => void run()} disabled={!databaseId || running || !sqlToRun.trim()}>{running ? <span className="button-spinner" /> : <Icon name="play" />}{running ? 'Running…' : selected ? 'Run selection' : 'Run script'}</Button>
     </div></div>
     <div ref={editorRef} className="sql-editor" style={{ height: editorHeight ?? undefined }} />
     {formatError ? <div className="notice notice-error" role="alert">Could not format SQL: {formatError}</div> : null}
     <div className="sql-divider" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.round(100 * (editorHeight ?? editorRef.current?.clientHeight ?? 0) / Math.max(1, workspaceRef.current?.clientHeight ?? 1)))} role="separator" aria-label="Resize script and results" aria-orientation="horizontal" tabIndex={0} onPointerDown={(event) => { if (event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); resizeOrigin.current = event.clientY - (editorRef.current?.getBoundingClientRect().bottom ?? event.clientY) }} onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) resizeEditor(event.clientY - resizeOrigin.current) }} onKeyDown={(event) => { if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); const editor = editorRef.current; if (editor) resizeEditor(editor.getBoundingClientRect().bottom + (event.key === 'ArrowUp' ? -20 : 20)) } }} />
     </div>
     <div id={resultsId} className={`sql-results${resultsFocused ? ' is-expanded' : ''}`} role="region" aria-label="Query results" aria-live="polite" onKeyDown={(event) => { if (event.key === 'Escape' && resultsFocused) { event.preventDefault(); event.stopPropagation(); setResultsFocused(false) } }}>
-      <div className="sql-results-heading">Results <div className="sql-result-actions"><span>{elapsedMs !== null ? `${elapsedMs} ms` : ''}</span><button className="sql-focus-button" type="button" aria-expanded={resultsFocused} aria-controls={resultsId} aria-label={resultsFocused ? 'Restore editor' : 'Expand results'} title={resultsFocused ? 'Restore editor' : 'Expand results'} onClick={() => setResultsFocused((value) => !value)}>{resultsFocused ? '↙' : '↗'}</button></div></div>
+      <div className="sql-results-heading">Results <div className="sql-result-actions"><span>{elapsedMs !== null ? `${elapsedMs} ms` : ''}</span><Button iconOnly type="button" aria-expanded={resultsFocused} aria-controls={resultsId} aria-label={resultsFocused ? 'Restore editor' : 'Expand results'} title={resultsFocused ? 'Restore editor' : 'Expand results'} onClick={() => setResultsFocused((value) => !value)}><Icon name={resultsFocused ? 'collapse' : 'expand'} /></Button></div></div>
       {copyMessage ? <div className="sql-message" role="status">{copyMessage}</div> : null}
       {error || execution?.error ? <div className="notice notice-error" role="alert">{error || execution?.error}</div> : null}
       {execution?.rolledBack ? <div className="sql-message">An open transaction was rolled back. Include COMMIT to save it.</div> : null}
+      {!execution && !error ? <div className="sql-results-empty"><Icon name="table" /><strong>{running ? 'Running query…' : 'Your results will appear here'}</strong><span>{running ? 'Waiting for the database to respond.' : 'Run a script or select a statement to get started.'}</span></div> : null}
       {execution?.results.map((result, index) => <div className="sql-result" key={index}>
-        <div className="sql-result-meta"><strong>{result.command || `Result ${index + 1}`}</strong>{result.columns.length ? <div className="sql-result-actions"><span>{result.rows.length}{result.truncated ? '+' : ''} rows{result.truncated ? ' (first 500 shown)' : ''}</span><button className="sql-button" type="button" onClick={() => void copyResult(result)}>Copy CSV</button><ExportMenu columns={result.columns} rows={result.rows} fileName="query-results" /></div> : null}</div>
+        <div className="sql-result-meta"><strong>{result.command || `Result ${index + 1}`}</strong>{result.columns.length ? <div className="sql-result-actions"><span>{result.rows.length}{result.truncated ? '+' : ''} {result.rows.length === 1 && !result.truncated ? 'row' : 'rows'}{result.truncated ? ' (first 500 shown)' : ''}</span><Button type="button" onClick={() => void copyResult(result)}><Icon name="copy" />Copy CSV</Button><ExportMenu columns={result.columns} rows={result.rows} fileName="query-results" /></div> : null}</div>
         {result.columns.length ? <div className="sql-table-wrap"><table><thead><tr>{result.columns.map((column, i) => <th key={i}>{column}</th>)}</tr></thead><tbody>{result.rows.map((row, i) => <tr key={i}>{row.map((value, j) => <td key={j}>{value === null ? <em>NULL</em> : value}</td>)}</tr>)}</tbody></table></div> : null}
       </div>)}
     </div>

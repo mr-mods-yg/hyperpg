@@ -1,3 +1,4 @@
+import Button from './ui/Button'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { PostgresService, UpdateService } from './services'
 import DataGrid, { type DataGridHandle } from './DataGrid'
@@ -878,9 +879,9 @@ function App() {
         </div>
         <div className="sidebar-section-heading">
           <span>Connections</span>
-          <button className="icon-button add-connection" type="button" onClick={openConnectionDialog} aria-label="Add a database connection" title="Add connection">
+          <Button variant="ghost" iconOnly size="sm" type="button" onClick={openConnectionDialog} aria-label="Add a database connection" title="Add connection">
             <Icon name="plus" />
-          </button>
+          </Button>
         </div>
 
         {connections.length === 0 ? (
@@ -933,10 +934,10 @@ function App() {
             {activeConnection ? <><span className="crumb-muted">{activeConnection.name}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className={selectedTable ? 'crumb-muted' : 'crumb-current'}>{selectedDatabase.name}</span>{selectedTable ? <><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-muted">{selectedTable.schema}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-current">{selectedTable.name}</span></> : null}</> : null}
           </div>
           <div className="topbar-right">
-            {activeConnection ? <><button className="topbar-add" type="button" onClick={newScript}>New SQL script</button><button className="topbar-add" type="button" onClick={() => void openScript()}>Open SQL</button></> : null}
-            <button className="topbar-add" type="button" onClick={() => setShowHistory(true)}>Query history</button>
+            {activeConnection ? <><Button type="button" onClick={newScript}>New SQL script</Button><Button type="button" onClick={() => void openScript()}>Open SQL</Button></> : null}
+            <Button type="button" onClick={() => setShowHistory(true)}>Query history</Button>
             <input ref={fileInput} type="file" accept=".sql,text/plain,application/sql" hidden onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (file) void file.text().then((content) => guardNavigation(() => openScriptContent(file.name, content))).catch((error: unknown) => setWorkspaceError(errorMessage(error, 'Could not open the script.'))) }} />
-            <button className="topbar-add" type="button" onClick={openConnectionDialog}><Icon name="plus" /> Add connection</button>
+            <Button type="button" onClick={openConnectionDialog}><Icon name="plus" /> Add connection</Button>
           </div>
         </header>
 
@@ -947,16 +948,16 @@ function App() {
               <button type="button" className="editor-tab-select" role="tab" id={`workspace-tab-${tab.id}`} aria-controls={`workspace-panel-${tab.id}`} aria-selected={activeTabId === tab.id} tabIndex={activeTabId === tab.id || (!activeTabId && tabs[0]?.id === tab.id) ? 0 : -1} aria-current={activeTabId === tab.id ? 'page' : undefined} title={`${tab.database.name}${tab.table ? ` · ${tab.table.schema}` : ''}`} onClick={() => { if (activeTabId !== tab.id || !tab.database.id) guardNavigation(() => activateTab(tab)) }}><Icon name={tab.kind === 'table' ? 'table' : 'edit'} /><span>{tab.title}</span></button>
               <button type="button" className="editor-tab-close" disabled={runningScripts.has(tab.id)} aria-label={`Close ${tab.title}`} onClick={() => closeTab(tab)}>×</button>
             </div>)}</div> : null}
-            {tabs.filter((tab) => tab.kind === 'script').map((tab) => <div key={tab.id} className="script-tab-panel" id={`workspace-panel-${tab.id}`} role="tabpanel" aria-labelledby={`workspace-tab-${tab.id}`} hidden={activeTabId !== tab.id}><div className="script-file-actions"><button type="button" onClick={() => void saveScript(tab)}>Save SQL</button><button type="button" onClick={() => renameScript(tab)}>Rename</button><span>{(sqlDrafts[tab.id] ?? '') !== (tab.savedContent ?? '') ? 'Unsaved changes' : tab.path ? 'Saved' : ''}</span></div><Suspense fallback={<span role="status">Loading editor…</span>}><SqlEditor onRunningChange={(running) => setRunningScripts((current) => { const next = new Set(current); if (running) next.add(tab.id); else next.delete(tab.id); return next })} active={activeTabId === tab.id && !showSettingsDialog} databaseId={tab.database.id} databaseName={tab.database.name} script={sqlDrafts[tab.id] ?? ''} onScriptChange={(script) => setSqlDrafts((drafts) => ({ ...drafts, [tab.id]: script }))} onExecuted={() => setScriptRefreshPending(true)} onHistory={(entry) => setHistory((current) => [{ ...entry, id: crypto.randomUUID(), connectionId: tab.connectionId, databaseName: tab.database.name }, ...current].slice(0, 200))} /></Suspense></div>)}
+            {tabs.filter((tab) => tab.kind === 'script').map((tab) => <div key={tab.id} className="script-tab-panel" id={`workspace-panel-${tab.id}`} role="tabpanel" aria-labelledby={`workspace-tab-${tab.id}`} hidden={activeTabId !== tab.id}><div className="script-file-actions"><Button onClick={() => void saveScript(tab)}>Save SQL</Button><Button onClick={() => renameScript(tab)}>Rename</Button><span className={`script-save-status${(sqlDrafts[tab.id] ?? '') !== (tab.savedContent ?? '') ? ' is-dirty' : ''}`}>{(sqlDrafts[tab.id] ?? '') !== (tab.savedContent ?? '') ? 'Unsaved changes' : tab.path ? 'Saved' : ''}</span></div><Suspense fallback={<span role="status">Loading editor…</span>}><SqlEditor onRunningChange={(running) => setRunningScripts((current) => { const next = new Set(current); if (running) next.add(tab.id); else next.delete(tab.id); return next })} active={activeTabId === tab.id && !showSettingsDialog} databaseId={tab.database.id} databaseName={tab.database.name} script={sqlDrafts[tab.id] ?? ''} onScriptChange={(script) => setSqlDrafts((drafts) => ({ ...drafts, [tab.id]: script }))} onExecuted={() => setScriptRefreshPending(true)} onHistory={(entry) => setHistory((current) => [{ ...entry, id: crypto.randomUUID(), connectionId: tab.connectionId, databaseName: tab.database.name }, ...current].slice(0, 200))} /></Suspense></div>)}
             {!showSql && activeConnection ? <>
             {!selectedTable ? <section className="database-header">
               <div>
                 <h1>{selectedDatabase.name}</h1>
                 <div className="database-meta">{activeConnection.name}<span className="meta-divider" />{activeConnection.host}<span className="meta-divider" />{tables.length} tables</div>
               </div>
-              <button className="quiet-action" type="button" aria-label="Refresh" title="Refresh" onClick={() => guardNavigation(() => setRefreshKey((value) => value + 1))}>
-                <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M14.8 5.1A6.5 6.5 0 1 0 15.5 9M14.8 5.1V1.8M14.8 5.1h-3.3" /></svg>
-              </button>
+              <Button variant="ghost" iconOnly className="database-refresh" type="button" aria-label="Refresh" title="Refresh" onClick={() => guardNavigation(() => setRefreshKey((value) => value + 1))}>
+                <Icon name="restore" />
+              </Button>
             </section> : null}
 
 
@@ -971,9 +972,9 @@ function App() {
                   <button id="table-view-data-tab" type="button" role="tab" aria-controls="table-view-panel" aria-selected={view === 'data'} tabIndex={view === 'data' ? 0 : -1} className={view === 'data' ? 'is-selected' : ''} onClick={() => setView('data')}>Data</button>
                   <button id="table-view-structure-tab" type="button" role="tab" aria-controls="table-view-panel" aria-selected={view === 'structure'} tabIndex={view === 'structure' ? 0 : -1} className={view === 'structure' ? 'is-selected' : ''} onClick={() => guardNavigation(() => setView('structure'))}>Structure</button>
                 </div> : null}
-                {selectedTable ? <button className="quiet-action workspace-refresh" type="button" aria-label="Refresh" title="Refresh" disabled={tableBusy || savingChanges} onClick={() => guardNavigation(() => setRefreshKey((value) => value + 1))}>
-                  <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M14.8 5.1A6.5 6.5 0 1 0 15.5 9M14.8 5.1V1.8M14.8 5.1h-3.3" /></svg>
-                </button> : null}
+                {selectedTable ? <Button variant="ghost" iconOnly className="workspace-refresh" type="button" aria-label="Refresh" title="Refresh" disabled={tableBusy || savingChanges} onClick={() => guardNavigation(() => setRefreshKey((value) => value + 1))}>
+                  <Icon name="restore" />
+                </Button> : null}
               </div>
 
               {!selectedTable ? (
@@ -1018,10 +1019,10 @@ function App() {
                       </select></label>
                       <span className="pagination-range">{pageStart.toLocaleString()}–{pageEnd.toLocaleString()} of {tableData.rowCount.toLocaleString()} rows</span>
                       <div className="pagination-actions">
-                        <button className="pagination-button" type="button" aria-label="Start page" disabled={tableBusy || tableStale || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset(0))}><Icon name="chevrons-left" />Start</button>
-                        <button className="pagination-button" type="button" aria-label="Previous page" disabled={tableBusy || tableStale || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset((offset) => Math.max(0, offset - pageSize)))}><Icon name="chevron-left" />Previous</button>
-                        <button className="pagination-button" type="button" aria-label="Next page" disabled={tableBusy || tableStale || savingChanges || pageOffset + pageSize >= tableData.rowCount} onClick={() => guardNavigation(() => setPageOffset((offset) => offset + pageSize))}>Next<Icon name="chevron-right" /></button>
-                        <button className="pagination-button" type="button" aria-label="End page" disabled={tableBusy || tableStale || savingChanges || pageOffset >= lastPageOffset} onClick={() => guardNavigation(() => setPageOffset(lastPageOffset))}>End<Icon name="chevrons-right" /></button>
+                        <Button type="button" aria-label="Start page" disabled={tableBusy || tableStale || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset(0))}><Icon name="chevrons-left" />Start</Button>
+                        <Button type="button" aria-label="Previous page" disabled={tableBusy || tableStale || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset((offset) => Math.max(0, offset - pageSize)))}><Icon name="chevron-left" />Previous</Button>
+                        <Button type="button" aria-label="Next page" disabled={tableBusy || tableStale || savingChanges || pageOffset + pageSize >= tableData.rowCount} onClick={() => guardNavigation(() => setPageOffset((offset) => offset + pageSize))}>Next<Icon name="chevron-right" /></Button>
+                        <Button type="button" aria-label="End page" disabled={tableBusy || tableStale || savingChanges || pageOffset >= lastPageOffset} onClick={() => guardNavigation(() => setPageOffset(lastPageOffset))}>End<Icon name="chevrons-right" /></Button>
                       </div>
                     </div> : null}
                   </> : <>
@@ -1087,7 +1088,7 @@ function App() {
               </div>
               <span className="welcome-kicker">PostgreSQL workspace</span>
               <h1>Connect a database</h1>
-              <button className="welcome-cta" type="button" onClick={openConnectionDialog}><Icon name="plus" /> Add a connection</button>
+              <Button variant="primary" size="lg" className="welcome-action" type="button" onClick={openConnectionDialog}><Icon name="plus" /> Add a connection</Button>
             </div>
           </div>
         )}
@@ -1096,23 +1097,23 @@ function App() {
       {updateInfo && (updateInfo.available || updateInstallError) && dismissedUpdate !== (updateInfo.version || 'update-error') && !showSettingsDialog && !showConnectionDialog ? <aside className={`update-alert ${updateInstallError ? 'has-error' : ''}`} role="alert">
         <span className="update-alert-mark" aria-hidden="true"><svg viewBox="0 0 18 18" fill="none"><path d="M9 2.2v8.2m0 3.4v.1M4.2 15.3h9.6" /><path d="m5.7 6.4 3.3-3.3 3.3 3.3" /></svg></span>
         <span className="update-alert-copy"><strong>{updateInstallError ? 'Update failed' : 'Update available'}</strong><small>{updateInstallError || `${updateInfo.version} · ${updateChannel === 'stable' ? 'Stable' : 'Nightly'}`}</small></span>
-        <button className="update-now-button" type="button" onClick={() => guardNavigation(() => { void handleInstallUpdate() })} disabled={installingUpdate || !updateInfo.available}>{installingUpdate ? <><span className="button-spinner" />{updateRestarting ? 'Opening installer…' : 'Updating…'}</> : updateInfo.available ? 'Update now' : 'Update unavailable'}</button>
+        <Button variant="primary" type="button" onClick={() => guardNavigation(() => { void handleInstallUpdate() })} disabled={installingUpdate || !updateInfo.available}>{installingUpdate ? <><span className="button-spinner" />{updateRestarting ? 'Opening installer…' : 'Updating…'}</> : updateInfo.available ? 'Update now' : 'Update unavailable'}</Button>
         <button className="update-dismiss" type="button" aria-label="Dismiss update notice" onClick={() => setDismissedUpdate(updateInfo.version || 'update-error')}><svg viewBox="0 0 18 18" fill="none"><path d="m4 4 10 10M14 4 4 14" /></svg></button>
       </aside> : null}
 
-      {renamingScript ? <div className="modal-backdrop" role="presentation"><section className="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="rename-title"><div className="dialog-heading"><h2 id="rename-title">Rename script</h2></div><form onSubmit={(event) => { event.preventDefault(); const title = scriptName.trim(); if (!title) return; setTabs((current) => current.map((tab) => tab.id === renamingScript.id ? { ...tab, title } : tab)); setRenamingScript(null) }}><label className="field-label" htmlFor="script-name">Script name</label><input id="script-name" className="dialog-input" autoFocus value={scriptName} onChange={(event) => setScriptName(event.target.value)} /><div className="dialog-actions"><button type="button" className="cancel-button" onClick={() => setRenamingScript(null)}>Cancel</button><button type="submit" className="connect-button" disabled={!scriptName.trim()}>Rename</button></div></form></section></div> : null}
+      {renamingScript ? <div className="modal-backdrop" role="presentation"><section className="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="rename-title"><div className="dialog-heading"><h2 id="rename-title">Rename script</h2></div><form onSubmit={(event) => { event.preventDefault(); const title = scriptName.trim(); if (!title) return; setTabs((current) => current.map((tab) => tab.id === renamingScript.id ? { ...tab, title } : tab)); setRenamingScript(null) }}><label className="field-label" htmlFor="script-name">Script name</label><input id="script-name" className="dialog-input" autoFocus value={scriptName} onChange={(event) => setScriptName(event.target.value)} /><div className="dialog-actions"><Button type="button" size="lg" onClick={() => setRenamingScript(null)}>Cancel</Button><Button type="submit" variant="primary" size="lg" disabled={!scriptName.trim()}>Rename</Button></div></form></section></div> : null}
       {showHistory ? <div className="modal-backdrop" role="presentation"><section className="connection-dialog history-dialog" role="dialog" aria-modal="true" aria-labelledby="history-title">
         <div className="dialog-heading"><h2 id="history-title">Query history</h2></div>
         <input className="dialog-input" aria-label="Search query history" autoFocus placeholder="Search SQL or database" value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} />
-        <div className="history-list">{history.filter((entry) => `${entry.sql} ${entry.databaseName}`.toLowerCase().includes(historySearch.toLowerCase())).map((entry) => <article className="history-entry" key={entry.id}><button type="button" className="history-open" onClick={() => openHistoryEntry(entry)}><code>{entry.sql}</code><small>{entry.databaseName} · {new Date(entry.executedAt).toLocaleString()} · {Math.round(entry.durationMs)} ms · {entry.error ? 'Failed' : 'Succeeded'}</small></button><button type="button" aria-label="Delete history entry" onClick={() => setHistory((current) => current.filter((item) => item.id !== entry.id))}>×</button></article>)}{history.length === 0 ? <p>No queries yet.</p> : null}</div>
-        <div className="dialog-actions"><button type="button" className="cancel-button" disabled={!history.length} onClick={() => setHistory([])}>Clear history</button><button type="button" className="connect-button" onClick={() => setShowHistory(false)}>Done</button></div>
+        <div className="history-list">{history.filter((entry) => `${entry.sql} ${entry.databaseName}`.toLowerCase().includes(historySearch.toLowerCase())).map((entry) => <article className="history-entry" key={entry.id}><button type="button" className="history-open" onClick={() => openHistoryEntry(entry)}><code>{entry.sql}</code><small>{entry.databaseName} · {new Date(entry.executedAt).toLocaleString()} · {Math.round(entry.durationMs)} ms · {entry.error ? 'Failed' : 'Succeeded'}</small></button><Button variant="ghost" iconOnly aria-label="Delete history entry" onClick={() => setHistory((current) => current.filter((item) => item.id !== entry.id))}>×</Button></article>)}{history.length === 0 ? <p>No queries yet.</p> : null}</div>
+        <div className="dialog-actions"><Button type="button" size="lg" disabled={!history.length} onClick={() => setHistory([])}>Clear history</Button><Button type="button" variant="primary" size="lg" onClick={() => setShowHistory(false)}>Done</Button></div>
       </section></div> : null}
 
       {scriptToClose ? <div className="modal-backdrop" role="presentation">
         <section className="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="close-script-title">
           <div className="dialog-heading"><h2 id="close-script-title">Close {scriptToClose.title}?</h2></div>
           <p>The script and results will be discarded.</p>
-          <div className="dialog-actions"><button type="button" className="cancel-button" autoFocus onClick={() => setScriptToClose(null)}>Keep editing</button><button type="button" className="connect-button" onClick={() => { closeTab(scriptToClose, true); setScriptToClose(null) }}>Close script</button></div>
+          <div className="dialog-actions"><Button type="button" size="lg" autoFocus onClick={() => setScriptToClose(null)}>Keep editing</Button><Button type="button" variant="primary" size="lg" onClick={() => { closeTab(scriptToClose, true); setScriptToClose(null) }}>Close script</Button></div>
         </section>
       </div> : null}
 
@@ -1129,9 +1130,9 @@ function App() {
           <div className="dialog-heading"><h2 id="unsaved-title">Unsaved changes</h2></div>
           <p>Save your table changes before continuing, or discard the draft.</p>
           <div className="dialog-actions">
-            <button type="button" className="cancel-button" autoFocus disabled={savingChanges} onClick={() => setPendingNavigation(null)}>Keep editing</button>
-            <button type="button" className="cancel-button" disabled={savingChanges} onClick={() => void resolveNavigation(false)}>Discard and continue</button>
-            <button type="button" className="connect-button" disabled={savingChanges} onClick={() => void resolveNavigation(true)}>{savingChanges ? 'Saving…' : 'Save and continue'}</button>
+            <Button type="button" size="lg" autoFocus disabled={savingChanges} onClick={() => setPendingNavigation(null)}>Keep editing</Button>
+            <Button type="button" size="lg" disabled={savingChanges} onClick={() => void resolveNavigation(false)}>Discard and continue</Button>
+            <Button type="button" variant="primary" size="lg" disabled={savingChanges} onClick={() => void resolveNavigation(true)}>{savingChanges ? 'Saving…' : 'Save and continue'}</Button>
           </div>
           {tableError ? <div role="alert">{tableError}</div> : null}
         </section>
@@ -1154,7 +1155,7 @@ function App() {
             </label>
             {connectionError ? <div className="form-error" role="alert"><svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="6.7" /><path d="M9 5.5v4M9 12.1v.1" /></svg>{connectionError}</div> : null}
             <div className="dialog-note"><svg viewBox="0 0 18 18" fill="none"><path d="M9 2.2 3.2 4.5v4.1c0 3.3 2.5 5.9 5.8 7.2 3.3-1.3 5.8-3.9 5.8-7.2V4.5L9 2.2Z" /><path d="m6.4 8.8 1.7 1.7 3.6-3.7" /></svg><span>Saved securely on this device.</span></div>
-            <div className="dialog-actions"><button className="cancel-button" type="button" onClick={() => setShowConnectionDialog(false)} disabled={connecting}>Cancel</button><button className="connect-button" type="submit" disabled={connecting || !editingConnectionId && !connectionUrl.trim()}>{connecting ? <><span className="button-spinner" />{editingConnectionId ? 'Saving' : 'Connecting'}</> : editingConnectionId ? 'Save connection' : 'Connect database'}</button></div>
+            <div className="dialog-actions"><Button size="lg" type="button" onClick={() => setShowConnectionDialog(false)} disabled={connecting}>Cancel</Button><Button variant="primary" size="lg" type="submit" disabled={connecting || !editingConnectionId && !connectionUrl.trim()}>{connecting ? <><span className="button-spinner" />{editingConnectionId ? 'Saving' : 'Connecting'}</> : editingConnectionId ? 'Save connection' : 'Connect database'}</Button></div>
           </form>
         </section>
       </div> : null}
@@ -1201,8 +1202,8 @@ function App() {
           </div>
           </div>
           <div hidden={settingsCategory !== 'shortcuts'} className="shortcut-settings"><h3>Keyboard shortcuts</h3>
-            {(Object.keys(shortcutLabels) as ShortcutAction[]).map((action) => <div className="shortcut-row" key={action}><span>{shortcutLabels[action]}</span><div><button type="button" className="shortcut-key" onClick={() => { setRecordingShortcut(action); setShortcutError('') }} onKeyDown={(event) => { if (recordingShortcut === action) recordShortcut(event, action) }} onBlur={() => setRecordingShortcut(null)} aria-label={`Set shortcut for ${shortcutLabels[action]}`}>{recordingShortcut === action ? 'Press keys…' : shortcuts[action] || 'Not set'}</button><button type="button" className="shortcut-clear" disabled={!shortcuts[action]} aria-label={`Clear shortcut for ${shortcutLabels[action]}`} onClick={() => { setShortcuts((current) => ({ ...current, [action]: '' })); setShortcutError('') }}>Clear</button></div></div>)}
-            {shortcutError ? <p role="alert">{shortcutError}</p> : null}<button type="button" className="shortcut-clear" onClick={() => { setShortcuts({ ...defaultShortcuts }); setShortcutError('') }}>Reset defaults</button>
+            {(Object.keys(shortcutLabels) as ShortcutAction[]).map((action) => <div className="shortcut-row" key={action}><span>{shortcutLabels[action]}</span><div><Button type="button" className="shortcut-binding" onClick={() => { setRecordingShortcut(action); setShortcutError('') }} onKeyDown={(event) => { if (recordingShortcut === action) recordShortcut(event, action) }} onBlur={() => setRecordingShortcut(null)} aria-label={`Set shortcut for ${shortcutLabels[action]}`}>{recordingShortcut === action ? 'Press keys…' : shortcuts[action] || 'Not set'}</Button><Button type="button" variant="ghost" className="shortcut-reset" disabled={!shortcuts[action]} aria-label={`Clear shortcut for ${shortcutLabels[action]}`} onClick={() => { setShortcuts((current) => ({ ...current, [action]: '' })); setShortcutError('') }}>Clear</Button></div></div>)}
+            {shortcutError ? <p role="alert">{shortcutError}</p> : null}<Button type="button" variant="ghost" className="shortcut-reset" onClick={() => { setShortcuts({ ...defaultShortcuts }); setShortcutError('') }}>Reset defaults</Button>
           </div>
           <div hidden={settingsCategory !== 'updates'}><div className="settings-section update-settings-section">
             <span className="field-label">Update channel</span>
@@ -1218,7 +1219,7 @@ function App() {
             </div>
             <div className="update-check-row">
               <span className={updateCheckError ? 'update-check-message is-error' : 'update-check-message'} role={updateCheckError ? 'alert' : 'status'}>{updateCheckError || (checkingUpdates ? 'Checking for updates…' : updateCheckMessage || '')}</span>
-              <button className="update-check-button" type="button" disabled={checkingUpdates || installingUpdate} onClick={() => setUpdateRefreshKey((key) => key + 1)}>{checkingUpdates ? 'Checking' : 'Check now'}</button>
+              <Button type="button" disabled={checkingUpdates || installingUpdate} onClick={() => setUpdateRefreshKey((key) => key + 1)}>{checkingUpdates ? 'Checking' : 'Check now'}</Button>
             </div>
           </div>
           </div></div></div>

@@ -1,3 +1,4 @@
+import Button from './ui/Button'
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type PointerEvent } from 'react'
 import { PostgresService } from './services'
 import { cellKey, cellRange, draftValue, editValue, selectionCSV, tableChanges, valueText, type CellPosition, type DraftRow, type RowEdits, type TableData } from './grid'
@@ -333,16 +334,16 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
 
   return <div className="editable-grid" ref={gridRef} onCopy={handleCopy} onKeyDown={keyDown}>
     <div className="grid-actions">
-      <button className="pagination-button" type="button" onClick={() => addRow()} disabled={saving || loading || readOnly || !data.columns.length}><Icon name="plus" />Add row</button>
-      <button className="pagination-button" type="button" onClick={() => void copySelection()} disabled={!selection.size || saving}><Icon name="copy" />Copy CSV</button>
+      <Button type="button" onClick={() => addRow()} disabled={saving || loading || readOnly || !data.columns.length}><Icon name="plus" />Add row</Button>
+      <Button type="button" onClick={() => void copySelection()} disabled={!selection.size || saving}><Icon name="copy" />Copy CSV</Button>
       <ExportMenu generatedColumns={data.columns.filter((column) => column.generated && !column.identityGeneration).map((column) => column.name)} columns={data.columns.map((column) => column.name)} rows={visibleRows.map((row) => data.columns.map((column, index) => draftValue(row, column, index, resolvedEdits)))} selectedRows={selectedRows.map((row) => data.columns.map((column, index) => draftValue(row, column, index, resolvedEdits)))} table={{ databaseId: connectionID, schema, name: table, options: queryOptions }} fileName={table} />
       {selection.size ? <span className="grid-selection-count">{selection.size} selected</span> : null}
       <label className="row-search"><Icon name="search" /><input value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Search this page" aria-label="Search this page" /></label>
     </div>
     {dirty ? <div className="grid-change-bar" role="status">
       <span>{changes.length} unsaved {changes.length === 1 ? 'row change' : 'row changes'}</span>
-      <button className="cancel-button" type="button" onClick={discard} disabled={saving}>Discard changes</button>
-      <button className="connect-button" type="button" onClick={() => void save()} disabled={saving || loading || readOnly}>{saving ? 'Saving…' : 'Save changes'}</button>
+      <Button type="button" onClick={discard} disabled={saving}>Discard changes</Button>
+      <Button variant="primary" type="button" onClick={() => void save()} disabled={saving || loading || readOnly}>{saving ? 'Saving…' : 'Save changes'}</Button>
     </div> : null}
     {error ? <div className="notice notice-error" role="alert">{error}</div> : null}
     <div className="data-grid-wrap" onContextMenu={(event) => {

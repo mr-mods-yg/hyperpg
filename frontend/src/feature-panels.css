@@ -1,7 +1,7 @@
 .table-query-controls { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 0; }
 .filter-panel { flex-basis: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); }
 .filter-row, .filter-actions, .generated-sql-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-.filter-row input, .filter-row select, .export-menu select { min-width: 0; padding: 7px 9px; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--input-surface); color: var(--ink); font: inherit; }
+.filter-row input, .filter-row select, .export-menu select { min-width: 0; min-height: calc(32px * var(--font-scale, 1)); padding: 4px 9px; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--input-surface); color: var(--ink); font: inherit; font-size: calc(12px * var(--font-scale, 1)); }
 .filter-row input { flex: 1; }
 .filter-actions { margin: 12px 0 0; }
 .table-details { margin-top: 24px; overflow: auto; }
@@ -13,6 +13,6 @@
 .export-menu { position: relative; }
 .export-menu summary { list-style: none; cursor: pointer; }
 .export-menu summary::-webkit-details-marker { display: none; }
-.export-menu-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 10; display: flex; flex-direction: column; gap: 10px; width: 210px; padding: 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--white); box-shadow: var(--shadow-modal); }
+.export-menu-panel { position: absolute; right: 0; top: calc(100% + 6px); max-width: calc(100vw - 32px); z-index: 10; display: flex; flex-direction: column; gap: 10px; width: 210px; padding: 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--white); box-shadow: var(--shadow-modal); font-size: calc(12px * var(--font-scale, 1)); }
 .export-menu-panel label { display: flex; flex-direction: column; gap: 5px; }
 .export-menu-panel [role=alert] { white-space: normal; color: var(--danger); }

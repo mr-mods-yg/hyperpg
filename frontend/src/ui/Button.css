@@ -1,0 +1,62 @@
+.ui-button {
+  --button-height: calc(32px * var(--font-scale, 1));
+  --button-padding: calc(11px * var(--font-scale, 1));
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--button-height);
+  margin: 0;
+  padding: 4px var(--button-padding);
+  color: var(--ink);
+  background: var(--white);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  box-shadow: var(--control-shadow);
+  font-family: inherit;
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 500;
+  line-height: 1.5;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: color .15s ease, background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+
+.ui-button--sm { --button-height: calc(28px * var(--font-scale, 1)); --button-padding: calc(8px * var(--font-scale, 1)); }
+.ui-button--lg { --button-height: calc(36px * var(--font-scale, 1)); --button-padding: calc(14px * var(--font-scale, 1)); }
+
+.ui-button--primary {
+  color: var(--accent-foreground);
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.ui-button--ghost { color: var(--muted); background: transparent; border-color: transparent; box-shadow: none; }
+.ui-button--icon { width: var(--button-height); height: var(--button-height); padding: 0; }
+.ui-button > svg { flex: none; width: 16px; height: 16px; }
+.ui-button .button-spinner { border-color: currentColor; border-top-color: transparent; opacity: .7; }
+
+.ui-button:not(:disabled):hover,
+.export-menu[open] > .ui-button { color: var(--ink); background: var(--control-hover); border-color: var(--line-strong); }
+.ui-button--primary:not(:disabled):hover { color: var(--accent-foreground); background: var(--accent-hover); border-color: var(--accent-hover); }
+.ui-button--ghost:not(:disabled):hover { border-color: transparent; }
+.ui-button:not(:disabled):active { box-shadow: none; }
+.ui-button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+.ui-button:disabled {
+  color: var(--muted);
+  background: var(--surface-raised);
+  border-color: var(--line);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.ui-button--ghost:disabled { color: var(--quiet); background: transparent; border-color: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-button { transition: none; }
+}
