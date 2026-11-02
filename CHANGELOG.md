@@ -4,6 +4,11 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ## [Unreleased]
 
+### Changed
+
+- Use neutral accents in the light and dark themes and remove the sidebar branding.
+- Distinguish database, schema, and table names in the sidebar, and enlarge the Settings close button.
+
 ## [1.0.10] - 2026-11-02
 
 ### Added

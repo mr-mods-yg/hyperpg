@@ -880,10 +880,6 @@ function App() {
   return (
     <div className={`app-shell ${resizingSidebar ? 'is-resizing-sidebar' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
       <aside className={`sidebar ${mobileNavOpen ? 'is-mobile-open' : ''}`} id="database-sidebar">
-        <div className="app-brand">
-          <img src="/hyperpg.svg" width="28" height="28" alt="" />
-          <span>HyperPG</span>
-        </div>
         <div className="sidebar-section-heading">
           <span>Connections</span>
           <Button variant="ghost" iconOnly size="sm" type="button" onClick={openConnectionDialog} aria-label="Add a database connection" title="Add connection">

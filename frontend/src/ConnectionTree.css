@@ -1,0 +1,28 @@
+/* Give each level of the tree its own typographic hierarchy. */
+.database-nav-item:not(.schema-nav-item) > span {
+  color: var(--ink);
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 600;
+}
+
+.schema-nav-item > span {
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 600;
+  letter-spacing: .025em;
+}
+
+.schema-tables .table-nav-item > span:nth-child(2) {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.schema-tables .table-nav-entry.is-current .table-nav-item > span:nth-child(2) {
+  font-weight: 600;
+}
+
+.database-nav-item > small {
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}

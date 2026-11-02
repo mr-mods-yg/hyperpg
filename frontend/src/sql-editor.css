@@ -49,6 +49,8 @@
 .sql-editor .cm-tooltip { color: var(--ink); background: var(--white); border-color: var(--line-strong); }
 .sql-editor .cm-tooltip-autocomplete > ul > li[aria-selected] { background: var(--accent); color: var(--accent-foreground); }
 :root[data-theme="dark"] .sql-editor, :root[data-theme="discord"] .sql-editor { --sql-keyword: #c6a8ff; --sql-string: #8cdbac; --sql-number: #ffb286; }
+:root:not([data-theme]) .sql-editor, :root[data-theme="light"] .sql-editor { --sql-keyword: #303030; --sql-string: #525252; --sql-number: #525252; }
+:root[data-theme="dark"] .sql-editor { --sql-keyword: #eeeeee; --sql-string: #c2c2c2; --sql-number: #c2c2c2; }
 
 .sql-divider { position: relative; flex: none; height: 10px; margin: -7px 0; cursor: row-resize; touch-action: none; border-radius: 4px; }
 .sql-divider::after { display: block; width: 36px; height: 3px; margin: 3px auto; border-radius: 4px; background: var(--line-strong); content: ''; }

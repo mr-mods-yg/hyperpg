@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { PostgresService } from './services'
+import './ConnectionTree.css'
 
 export type ConnectionInfo = {
   id: string
