@@ -1,0 +1,25 @@
+.export-menu { position: relative; }
+.export-menu summary { list-style: none; }
+.export-menu summary::-webkit-details-marker { display: none; }
+.export-menu:not([open]) > .export-menu-panel { display: none; }
+.export-menu[open] > .ui-button { color: var(--ink); background: var(--control-hover); border-color: var(--line-strong); }
+.export-menu-panel {
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 220px;
+  max-width: calc(100vw - 16px);
+  padding: 14px;
+  overflow-y: auto;
+  color: var(--ink);
+  background: var(--white);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow-modal);
+  font-size: calc(12px * var(--font-scale, 1));
+}
+.export-menu-panel label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); }
+.export-menu-panel select { min-width: 0; width: 100%; min-height: calc(32px * var(--font-scale, 1)); padding: 4px 9px; color: var(--ink); background: var(--input-surface); border: 1px solid var(--line-strong); border-radius: 6px; font: inherit; }
+.export-menu-panel [role="alert"] { white-space: normal; overflow-wrap: anywhere; color: var(--danger); line-height: 1.5; }

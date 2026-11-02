@@ -1,7 +1,8 @@
-type IconName = 'plus' | 'copy' | 'table' | 'search' | 'lock' | 'chevron-left' | 'chevron-right' | 'chevrons-left' | 'chevrons-right' | 'edit' | 'null' | 'undo' | 'row-above' | 'row-below' | 'duplicate' | 'trash' | 'restore' | 'play' | 'expand' | 'collapse' | 'download'
+type IconName = 'plus' | 'copy' | 'table' | 'search' | 'lock' | 'chevron-left' | 'chevron-right' | 'chevrons-left' | 'chevrons-right' | 'edit' | 'null' | 'undo' | 'row-above' | 'row-below' | 'duplicate' | 'trash' | 'restore' | 'play' | 'expand' | 'collapse' | 'download' | 'close'
 
 export default function Icon({ name, className = '' }: { name: IconName; className?: string }) {
   const paths = {
+    close: <path d="m5 5 10 10M15 5 5 15" />,
     play: <path d="m7 4 9 6-9 6V4Z" />,
     expand: <><path d="M12 3h5v5M8 17H3v-5M17 3l-5 5M3 17l5-5" /></>,
     collapse: <><path d="M17 8h-5V3M3 12h5v5M12 8l5-5M8 12l-5 5" /></>,

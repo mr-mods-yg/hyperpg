@@ -82,6 +82,7 @@ function App() {
   }, [])
   const [savingChanges, setSavingChanges] = useState(false)
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
+  const pendingNavigationOpener = useRef<HTMLElement | null>(null)
   const [tablesLoading, setTablesLoading] = useState(false)
   const [tableLoading, setTableLoading] = useState(false)
   const [tableSelectionVersion, setTableSelectionVersion] = useState(0)
@@ -347,10 +348,11 @@ function App() {
   }
 
   useEffect(() => {
-    if (!showConnectionDialog && !showSettingsDialog && !scriptToClose && !showHistory && !renamingScript) return
+    if (!showConnectionDialog && !showSettingsDialog && !scriptToClose && !showHistory && !renamingScript && !pendingNavigation) return
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || recordingShortcut) return
-      if (renamingScript) setRenamingScript(null)
+      if (pendingNavigation) { if (!savingChanges) setPendingNavigation(null) }
+      else if (renamingScript) setRenamingScript(null)
       else if (showHistory) setShowHistory(false)
       else if (scriptToClose) setScriptToClose(null)
       else if (showSettingsDialog) setShowSettingsDialog(false)
@@ -358,11 +360,12 @@ function App() {
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [showConnectionDialog, showSettingsDialog, connecting, recordingShortcut, scriptToClose, showHistory, renamingScript])
+  }, [showConnectionDialog, showSettingsDialog, connecting, recordingShortcut, scriptToClose, showHistory, renamingScript, pendingNavigation, savingChanges])
 
   useEffect(() => {
-    if (!showConnectionDialog && !showSettingsDialog && !scriptToClose && !showHistory && !renamingScript) return
-    const dialog = document.querySelector<HTMLElement>('.modal-backdrop [role="dialog"]')
+    if (!showConnectionDialog && !showSettingsDialog && !scriptToClose && !showHistory && !renamingScript && !pendingNavigation) return
+    const dialogs = [...document.querySelectorAll<HTMLElement>('.modal-backdrop [role="dialog"]')]
+    const dialog = dialogs[dialogs.length - 1]
     const backdrop = dialog?.closest<HTMLElement>('.modal-backdrop')
     if (!dialog || !backdrop) return
 
@@ -397,11 +400,11 @@ function App() {
     return () => {
       document.removeEventListener('keydown', keepFocusInDialog)
       siblings.forEach((element, index) => { element.inert = priorInertStates[index] })
-      const opener = showSettingsDialog ? settingsDialogOpener.current : showConnectionDialog ? connectionDialogOpener.current : previouslyFocused
+      const opener = pendingNavigation ? pendingNavigationOpener.current : showSettingsDialog ? settingsDialogOpener.current : showConnectionDialog ? connectionDialogOpener.current : previouslyFocused
       if (opener?.isConnected) opener.focus()
       else previouslyFocused?.focus()
     }
-  }, [showConnectionDialog, showSettingsDialog, scriptToClose, showHistory, renamingScript])
+  }, [showConnectionDialog, showSettingsDialog, scriptToClose, showHistory, renamingScript, pendingNavigation])
 
   const pageStart = tableData?.rows.length ? pageOffset + 1 : 0
   const pageEnd = tableData ? Math.min(pageOffset + tableData.rows.length, tableData.rowCount) : 0
@@ -525,7 +528,10 @@ function App() {
 
   const guardNavigation = (action: () => void) => {
     if (savingChanges) return
-    if (hasPendingChanges) setPendingNavigation(() => action)
+    if (hasPendingChanges) {
+      pendingNavigationOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      setPendingNavigation(() => action)
+    }
     else action()
   }
 
@@ -802,6 +808,7 @@ function App() {
     } catch (error) { setWorkspaceError(errorMessage(error, 'Could not save the script.')) }
   }
   const renameScript = (tab: WorkspaceTab) => { setScriptName(tab.title); setRenamingScript(tab) }
+  const filteredHistory = history.filter((entry) => `${entry.sql} ${entry.databaseName}`.toLowerCase().includes(historySearch.toLowerCase()))
   const openHistoryEntry = (entry: HistoryEntry) => guardNavigation(() => {
     setShowHistory(false)
     openScriptContent('History query', entry.sql, '', entry.connectionId, { name: entry.databaseName, id: '' })
@@ -946,7 +953,7 @@ function App() {
             {savedConnectionsError || workspaceError ? <div className="notice notice-error compact-notice" role="alert">{savedConnectionsError || workspaceError}</div> : null}
             {tabs.length ? <div className="editor-tab-bar" role="tablist" aria-label="Open workspaces" onKeyDown={handleTableViewKeyDown}>{tabs.map((tab) => <div className={`editor-tab ${activeTabId === tab.id ? 'is-active' : ''}`} key={tab.id}>
               <button type="button" className="editor-tab-select" role="tab" id={`workspace-tab-${tab.id}`} aria-controls={`workspace-panel-${tab.id}`} aria-selected={activeTabId === tab.id} tabIndex={activeTabId === tab.id || (!activeTabId && tabs[0]?.id === tab.id) ? 0 : -1} aria-current={activeTabId === tab.id ? 'page' : undefined} title={`${tab.database.name}${tab.table ? ` · ${tab.table.schema}` : ''}`} onClick={() => { if (activeTabId !== tab.id || !tab.database.id) guardNavigation(() => activateTab(tab)) }}><Icon name={tab.kind === 'table' ? 'table' : 'edit'} /><span>{tab.title}</span></button>
-              <button type="button" className="editor-tab-close" disabled={runningScripts.has(tab.id)} aria-label={`Close ${tab.title}`} onClick={() => closeTab(tab)}>×</button>
+              <Button variant="ghost" size="sm" iconOnly className="editor-tab-dismiss" disabled={runningScripts.has(tab.id)} aria-label={`Close ${tab.title}`} onClick={() => closeTab(tab)}><Icon name="close" /></Button>
             </div>)}</div> : null}
             {tabs.filter((tab) => tab.kind === 'script').map((tab) => <div key={tab.id} className="script-tab-panel" id={`workspace-panel-${tab.id}`} role="tabpanel" aria-labelledby={`workspace-tab-${tab.id}`} hidden={activeTabId !== tab.id}><div className="script-file-actions"><Button onClick={() => void saveScript(tab)}>Save SQL</Button><Button onClick={() => renameScript(tab)}>Rename</Button><span className={`script-save-status${(sqlDrafts[tab.id] ?? '') !== (tab.savedContent ?? '') ? ' is-dirty' : ''}`}>{(sqlDrafts[tab.id] ?? '') !== (tab.savedContent ?? '') ? 'Unsaved changes' : tab.path ? 'Saved' : ''}</span></div><Suspense fallback={<span role="status">Loading editor…</span>}><SqlEditor onRunningChange={(running) => setRunningScripts((current) => { const next = new Set(current); if (running) next.add(tab.id); else next.delete(tab.id); return next })} active={activeTabId === tab.id && !showSettingsDialog} databaseId={tab.database.id} databaseName={tab.database.name} script={sqlDrafts[tab.id] ?? ''} onScriptChange={(script) => setSqlDrafts((drafts) => ({ ...drafts, [tab.id]: script }))} onExecuted={() => setScriptRefreshPending(true)} onHistory={(entry) => setHistory((current) => [{ ...entry, id: crypto.randomUUID(), connectionId: tab.connectionId, databaseName: tab.database.name }, ...current].slice(0, 200))} /></Suspense></div>)}
             {!showSql && activeConnection ? <>
@@ -1105,7 +1112,7 @@ function App() {
       {showHistory ? <div className="modal-backdrop" role="presentation"><section className="connection-dialog history-dialog" role="dialog" aria-modal="true" aria-labelledby="history-title">
         <div className="dialog-heading"><h2 id="history-title">Query history</h2></div>
         <input className="dialog-input" aria-label="Search query history" autoFocus placeholder="Search SQL or database" value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} />
-        <div className="history-list">{history.filter((entry) => `${entry.sql} ${entry.databaseName}`.toLowerCase().includes(historySearch.toLowerCase())).map((entry) => <article className="history-entry" key={entry.id}><button type="button" className="history-open" onClick={() => openHistoryEntry(entry)}><code>{entry.sql}</code><small>{entry.databaseName} · {new Date(entry.executedAt).toLocaleString()} · {Math.round(entry.durationMs)} ms · {entry.error ? 'Failed' : 'Succeeded'}</small></button><Button variant="ghost" iconOnly aria-label="Delete history entry" onClick={() => setHistory((current) => current.filter((item) => item.id !== entry.id))}>×</Button></article>)}{history.length === 0 ? <p>No queries yet.</p> : null}</div>
+        <div className="history-list">{filteredHistory.map((entry) => <article className="history-entry" key={entry.id}><button type="button" className="history-open" onClick={() => openHistoryEntry(entry)}><code>{entry.sql}</code><small>{entry.databaseName} · {new Date(entry.executedAt).toLocaleString()} · {Math.round(entry.durationMs)} ms · {entry.error ? 'Failed' : 'Succeeded'}</small></button><Button variant="ghost" iconOnly aria-label="Delete history entry" onClick={() => setHistory((current) => current.filter((item) => item.id !== entry.id))}>×</Button></article>)}{!filteredHistory.length ? <div className="history-empty" role="status"><Icon name="search" /><strong>{history.length ? 'No matching queries' : 'No queries yet.'}</strong><span>{history.length ? 'Try another SQL fragment or database name.' : 'Run a query to add it to your history.'}</span></div> : null}</div>
         <div className="dialog-actions"><Button type="button" size="lg" disabled={!history.length} onClick={() => setHistory([])}>Clear history</Button><Button type="button" variant="primary" size="lg" onClick={() => setShowHistory(false)}>Done</Button></div>
       </section></div> : null}
 
@@ -1118,15 +1125,7 @@ function App() {
       </div> : null}
 
       {pendingNavigation ? <div className="modal-backdrop" role="presentation">
-        <section className="connection-dialog unsaved-dialog" role="dialog" aria-modal="true" aria-labelledby="unsaved-title" onKeyDown={(event) => {
-          if (event.key === 'Escape' && !savingChanges) setPendingNavigation(null)
-          if (event.key === 'Tab') {
-            const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
-            const first = buttons[0], last = buttons[buttons.length - 1]
-            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
-            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
-          }
-        }}>
+        <section className="connection-dialog unsaved-dialog" role="dialog" aria-modal="true" aria-labelledby="unsaved-title" tabIndex={-1}>
           <div className="dialog-heading"><h2 id="unsaved-title">Unsaved changes</h2></div>
           <p>Save your table changes before continuing, or discard the draft.</p>
           <div className="dialog-actions">

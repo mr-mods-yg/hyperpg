@@ -13,3 +13,16 @@
 @media (max-width: 560px) {
   .script-file-actions { padding-inline: 12px; }
 }
+
+.editor-tab-bar { display: flex; flex: none; gap: 2px; padding: 8px 12px 0; overflow-x: auto; background: var(--surface-raised); border-bottom: 1px solid var(--line); scrollbar-width: thin; }
+.editor-tab { display: flex; flex: none; min-width: 0; min-height: calc(36px * var(--font-scale, 1)); align-items: center; color: var(--muted); border: 1px solid transparent; border-bottom: 0; border-radius: 7px 7px 0 0; }
+.editor-tab:hover { background: var(--control-hover); color: var(--ink); }
+.editor-tab.is-active { position: relative; color: var(--ink); background: var(--paper); border-color: var(--line-strong); }
+.editor-tab.is-active::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: var(--paper); content: ''; }
+.editor-tab-select { display: flex; align-self: stretch; align-items: center; gap: 8px; min-width: 0; max-width: 220px; padding: 6px 4px 6px 12px; color: inherit; background: transparent; border: 0; cursor: pointer; font: inherit; font-size: calc(12px * var(--font-scale, 1)); }
+.editor-tab-select .ui-icon { flex: none; color: var(--accent-text); }
+.editor-tab-select span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor-tab-dismiss { margin-inline: 4px; }
+.history-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px 16px; color: var(--muted); text-align: center; font-size: calc(12px * var(--font-scale, 1)); line-height: 1.6; }
+.history-empty > .ui-icon { width: 24px; height: 24px; flex: none; margin-bottom: 4px; }
+.history-empty strong { color: var(--ink); font-weight: 500; }

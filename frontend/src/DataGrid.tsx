@@ -299,6 +299,12 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
     setMenu({ x, y, cell: position })
   }
 
+  function nextTabCell(position: CellPosition, backwards: boolean): CellPosition | null {
+    const index = position.row * data.columns.length + position.column + (backwards ? -1 : 1)
+    if (index < 0 || index >= visibleRows.length * data.columns.length) return null
+    return { row: Math.floor(index / data.columns.length), column: index % data.columns.length }
+  }
+
   function keyDown(event: KeyboardEvent<HTMLDivElement>) {
     if ((event.target as HTMLElement).closest('textarea, input, button, [role="menu"]')) return
     const command = event.ctrlKey || event.metaKey
@@ -319,11 +325,12 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
     }
     if (event.key === 'Enter' || event.key === 'F2') { event.preventDefault(); beginEdit(active); return }
     if (!command && !event.altKey && event.key.length === 1) { event.preventDefault(); beginEdit(active, event.key); return }
+    if (event.key === 'Tab' && !nextTabCell(active, event.shiftKey)) return
     const deltas: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1], Tab: [0, event.shiftKey ? -1 : 1] }
     const delta = deltas[event.key]
     if (delta) {
       event.preventDefault()
-      const next = { row: Math.max(0, Math.min(visibleRows.length - 1, active.row + delta[0])), column: Math.max(0, Math.min(data.columns.length - 1, active.column + delta[1])) }
+      const next = event.key === 'Tab' ? nextTabCell(active, event.shiftKey)! : { row: Math.max(0, Math.min(visibleRows.length - 1, active.row + delta[0])), column: Math.max(0, Math.min(data.columns.length - 1, active.column + delta[1])) }
       const extend = event.shiftKey && event.key !== 'Tab'
       setSelection(extend ? cellRange(anchor.current ?? active, next) : new Set([cellKey(next)]))
       if (!extend) anchor.current = next
@@ -378,7 +385,7 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
               ].join(' ') : ''
               const editing = editor?.row.id === row.id && editor.column === columnIndex
               const changed = Object.prototype.hasOwnProperty.call(edits[row.id] ?? {}, column.name)
-              return <td key={column.name} role="gridcell" data-cell={key} aria-selected={selected} aria-readonly={readOnly || column.generated || deleted.has(row.id)} tabIndex={active ? cellKey(active) === key ? 0 : -1 : rowIndex === 0 && columnIndex === 0 ? 0 : -1}
+              return <td key={column.name} role="gridcell" data-cell={key} aria-selected={selected} aria-readonly={readOnly || column.generated || deleted.has(row.id)} tabIndex={editing ? -1 : active ? cellKey(active) === key ? 0 : -1 : rowIndex === 0 && columnIndex === 0 ? 0 : -1}
                 className={`${selected ? 'is-selected' : ''} ${selectionEdges} ${active && cellKey(active) === key ? 'is-active' : ''} ${changed ? 'is-changed' : ''} ${editing ? 'is-editing' : ''}`}
                 aria-label={`Row ${rowIndex + 1}, ${column.name}: ${value === undefined ? 'DEFAULT' : value === null ? 'NULL' : valueText(value)}`}
                 onFocus={() => { if (!active) { setActive(position); setSelection(new Set([key])); anchor.current = position } }}
@@ -389,8 +396,10 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
                     event.stopPropagation()
                     if (event.key === 'Escape') { event.preventDefault(); setEditor(null); focusCell(position) }
                     else if ((event.key === 'Enter' && !event.shiftKey) || event.key === 'Tab') {
+                      // At the grid boundary, native Tab moves out; blur commits the edit.
+                      if (event.key === 'Tab' && !nextTabCell(position, event.shiftKey)) return
                       event.preventDefault(); commitEditor()
-                      const next = event.key === 'Tab' ? { row: rowIndex, column: Math.max(0, Math.min(data.columns.length - 1, columnIndex + (event.shiftKey ? -1 : 1))) } : position
+                      const next = event.key === 'Tab' ? nextTabCell(position, event.shiftKey)! : position
                       setActive(next); setSelection(new Set([cellKey(next)])); anchor.current = next; focusCell(next)
                     }
                   }} /> : <div className="cell-value-scroll" title={valueText(value)}>{value === undefined ? <span className="null-value">DEFAULT</span> : value === null ? <span className="null-value">NULL</span> : typeof value === 'boolean' ? <span className={`boolean-value ${value ? 'is-true' : 'is-false'}`}>{String(value)}</span> : <span className="cell-text">{valueText(value)}</span>}</div>}

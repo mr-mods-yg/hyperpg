@@ -35,6 +35,8 @@ test('records, searches, opens and deletes query history', async ({ page }) => {
   await page.getByRole('textbox', { name: 'SQL script' }).fill('select 987;')
   await page.getByRole('button', { name: 'Run script' }).click()
   await page.getByRole('button', { name: 'Query history' }).click()
+  await page.getByRole('textbox', { name: 'Search query history' }).fill('not-in-history')
+  await expect(page.getByRole('dialog', { name: 'Query history' }).getByRole('status')).toContainText('No matching queries')
   await page.getByRole('textbox', { name: 'Search query history' }).fill('987')
   await expect(page.getByRole('dialog', { name: 'Query history' }).getByText('select 987;', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: /select 987/ }).click()

@@ -41,8 +41,7 @@
 .ui-button > svg { flex: none; width: 16px; height: 16px; }
 .ui-button .button-spinner { border-color: currentColor; border-top-color: transparent; opacity: .7; }
 
-.ui-button:not(:disabled):hover,
-.export-menu[open] > .ui-button { color: var(--ink); background: var(--control-hover); border-color: var(--line-strong); }
+.ui-button:not(:disabled):hover { color: var(--ink); background: var(--control-hover); border-color: var(--line-strong); }
 .ui-button--primary:not(:disabled):hover { color: var(--accent-foreground); background: var(--accent-hover); border-color: var(--accent-hover); }
 .ui-button--ghost:not(:disabled):hover { border-color: transparent; }
 .ui-button:not(:disabled):active { box-shadow: none; }

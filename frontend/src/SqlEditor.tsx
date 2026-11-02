@@ -33,6 +33,7 @@ export default function SqlEditor({ onRunningChange, active, databaseId, databas
   const [selection, setSelection] = useState({ start: 0, end: 0 })
   const [copyMessage, setCopyMessage] = useState('')
   const resultsId = useId()
+  const resultsToggleRef = useRef<HTMLButtonElement>(null)
   const sourceRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -167,8 +168,8 @@ export default function SqlEditor({ onRunningChange, active, databaseId, databas
     {formatError ? <div className="notice notice-error" role="alert">Could not format SQL: {formatError}</div> : null}
     <div className="sql-divider" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.round(100 * (editorHeight ?? editorRef.current?.clientHeight ?? 0) / Math.max(1, workspaceRef.current?.clientHeight ?? 1)))} role="separator" aria-label="Resize script and results" aria-orientation="horizontal" tabIndex={0} onPointerDown={(event) => { if (event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); resizeOrigin.current = event.clientY - (editorRef.current?.getBoundingClientRect().bottom ?? event.clientY) }} onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) resizeEditor(event.clientY - resizeOrigin.current) }} onKeyDown={(event) => { if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); const editor = editorRef.current; if (editor) resizeEditor(editor.getBoundingClientRect().bottom + (event.key === 'ArrowUp' ? -20 : 20)) } }} />
     </div>
-    <div id={resultsId} className={`sql-results${resultsFocused ? ' is-expanded' : ''}`} role="region" aria-label="Query results" aria-live="polite" onKeyDown={(event) => { if (event.key === 'Escape' && resultsFocused) { event.preventDefault(); event.stopPropagation(); setResultsFocused(false) } }}>
-      <div className="sql-results-heading">Results <div className="sql-result-actions"><span>{elapsedMs !== null ? `${elapsedMs} ms` : ''}</span><Button iconOnly type="button" aria-expanded={resultsFocused} aria-controls={resultsId} aria-label={resultsFocused ? 'Restore editor' : 'Expand results'} title={resultsFocused ? 'Restore editor' : 'Expand results'} onClick={() => setResultsFocused((value) => !value)}><Icon name={resultsFocused ? 'collapse' : 'expand'} /></Button></div></div>
+    <div id={resultsId} className={`sql-results${resultsFocused ? ' is-expanded' : ''}`} role="region" aria-label="Query results" aria-live="polite" onKeyDown={(event) => { if (event.key === 'Escape' && resultsFocused) { event.preventDefault(); event.stopPropagation(); setResultsFocused(false); resultsToggleRef.current?.focus() } }}>
+      <div className="sql-results-heading">Results <div className="sql-result-actions"><span>{elapsedMs !== null ? `${elapsedMs} ms` : ''}</span><Button ref={resultsToggleRef} iconOnly type="button" aria-expanded={resultsFocused} aria-controls={resultsId} aria-label={resultsFocused ? 'Restore editor' : 'Expand results'} title={resultsFocused ? 'Restore editor' : 'Expand results'} onClick={() => setResultsFocused((value) => !value)}><Icon name={resultsFocused ? 'collapse' : 'expand'} /></Button></div></div>
       {copyMessage ? <div className="sql-message" role="status">{copyMessage}</div> : null}
       {error || execution?.error ? <div className="notice notice-error" role="alert">{error || execution?.error}</div> : null}
       {execution?.rolledBack ? <div className="sql-message">An open transaction was rolled back. Include COMMIT to save it.</div> : null}

@@ -78,3 +78,28 @@ test('late generated SQL cannot replace a table draft after leaving Structure', 
   await expect(page.locator('[data-cell="0:1"]')).toHaveText('draft')
   await expect(page.getByRole('tab', { name:'items · SELECT',exact:true })).toHaveCount(0)
 })
+
+test('export stays visible in a short workspace and dismisses with Escape or outside click', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 700, height: 560 })
+  const trigger = page.locator('.export-menu summary')
+  await trigger.click()
+  const panel = page.locator('.export-menu-panel')
+  await expect(page.getByRole('button', { name: 'Save file' })).toBeVisible()
+  const bounds = (await panel.boundingBox())!
+  expect(bounds.x).toBeGreaterThanOrEqual(8)
+  expect(bounds.y).toBeGreaterThanOrEqual(8)
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(692)
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(552)
+  expect(await page.getByRole('button', { name: 'Save file' }).evaluate((element) => {
+    const rect = element.getBoundingClientRect()
+    return element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2))
+  })).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('export-panel.png') })
+  await page.getByLabel('Export format').focus()
+  await page.keyboard.press('Escape')
+  await expect(panel).toBeHidden()
+  await expect(trigger).toBeFocused()
+  await trigger.click()
+  await page.getByRole('button', { name: 'Filters', exact: true }).click()
+  await expect(panel).toBeHidden()
+})

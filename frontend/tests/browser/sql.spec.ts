@@ -41,8 +41,12 @@ test('runs scripts, displays results, and keeps the draft', async ({ page }) => 
   await expect(editor).toBeVisible()
   expect(await page.locator('.sql-editor:visible').boundingBox()).toEqual(originalEditorBounds)
   await page.getByRole('button', { name: 'Expand results' }).click()
+  expect(await page.locator('.sql-source').evaluate((element) => (element as HTMLElement).inert)).toBe(true)
+  await page.getByRole('button', { name: 'Copy CSV' }).focus()
   await page.keyboard.press('Escape')
   await expect(editor).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Expand results' })).toBeFocused()
+  expect(await page.locator('.sql-source').evaluate((element) => (element as HTMLElement).inert)).toBe(false)
   await expect.poll(() => page.evaluate(() => (window as any).sqlTestState.calls)).toEqual([{ id: 'test', script: "SELECT 'hello';" }])
   await expect.poll(() => page.evaluate(() => (window as any).sqlTestState.refreshes)).toBeGreaterThan(1)
   await page.getByRole('button', { name: 'New SQL script' }).click()
@@ -161,7 +165,7 @@ for (const theme of ['light', 'dark', 'cream', 'discord']) {
     await run.click()
     await expect(page.getByRole('cell', { name: 'hello' })).toBeVisible()
 
-    const controls = page.locator('.topbar-right button, .script-file-actions button, .sql-actions button, .sql-result-actions button, .export-menu summary')
+    const controls = page.locator('.topbar-right button:visible, .script-file-actions button:visible, .sql-actions button:visible, .sql-result-actions button:visible, .export-menu summary:visible')
     const styles = await controls.evaluateAll((elements) => elements.map((element) => {
       const style = getComputedStyle(element)
       return { height: element.getBoundingClientRect().height, fontSize: style.fontSize, radius: style.borderRadius }
@@ -203,3 +207,23 @@ for (const theme of ['light', 'dark', 'cream', 'discord']) {
     }
   })
 }
+
+test('tabs and settings respect the largest font size on narrow screens', async ({ page }, testInfo) => {
+  await page.addInitScript(() => localStorage.setItem('hyperpg-font-size-px', '18'))
+  await page.route('**/bindings/changeme/internal/database/postgresservice.*', route => route.fulfill({ contentType: 'text/javascript', body: postgresFixture }))
+  await page.route('**/bindings/changeme/internal/updates/updateservice.*', route => route.fulfill({ contentType: 'text/javascript', body: 'export async function CheckForUpdates() { return { available: false } }' }))
+  await page.goto('/')
+  await page.getByRole('button', { name: 'New SQL script' }).click()
+  await expect(page.getByRole('tab', { name: 'Script 1', exact: true })).toHaveCSS('font-size', '18px')
+  expect((await page.locator('.editor-tab').boundingBox())!.height).toBeGreaterThanOrEqual(54)
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toHaveCSS('font-size', '30px')
+  await expect(page.locator('label[for="font-size-control"]')).toHaveCSS('font-size', '21px')
+  await page.getByRole('button', { name: 'Keyboard shortcuts', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Keyboard shortcuts' })).toHaveCSS('font-size', '21px')
+  await page.setViewportSize({ width: 390, height: 700 })
+  expect(await page.locator('.settings-content').evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('large-font-settings.png') })
+  await page.getByRole('button', { name: 'Close settings' }).click()
+  await expect(page.getByRole('tab', { name: 'Script 1', exact: true })).toBeVisible()
+})
