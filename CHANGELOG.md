@@ -4,6 +4,8 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ## [Unreleased]
 
+## [1.0.10] - 2026-11-02
+
 ### Added
 
 - SQL highlighting, schema autocomplete, formatting, and current-statement execution.
@@ -11,7 +13,6 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 - Database-side table filters and column sorting.
 - CSV, JSON, and SQL file exports, including streaming exports of full filtered tables.
 - Constraints, indexes, table DDL, and SQL templates.
-
 - Table and SQL script tabs with separate drafts and results.
 - Full-screen settings with appearance, shortcut, and update categories.
 - Configurable action shortcuts, with F5 for refresh and Ctrl+W for closing tabs.
@@ -20,11 +21,13 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 ### Changed
 
 - Refine tabs, settings, and SQL controls across themes.
+- Standardize button sizes and improve layouts for smaller screens and larger fonts.
 
 ### Fixed
 
 - Preserve table view settings and prevent late database opens from replacing newer navigation.
 - Protect unsaved edits when background SQL finishes, and confirm before discarding scripts.
+- Keep export controls visible and improve keyboard navigation and dialog focus.
 
 ## [1.0.9] - 2026-10-30
 
