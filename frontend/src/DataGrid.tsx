@@ -1,5 +1,6 @@
 import Button from './ui/Button'
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type PointerEvent } from 'react'
+import ActionGroup from './ui/ActionGroup'
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
 import { PostgresService } from './services'
 import { cellKey, cellRange, draftValue, editValue, selectionCSV, tableChanges, valueText, type CellPosition, type DraftRow, type RowEdits, type TableData } from './grid'
 import Icon from './Icon'
@@ -9,6 +10,7 @@ import { emptyTableQuery, type TableQueryOptions } from './table-query'
 export type DataGridHandle = { save: () => Promise<boolean>; discard: () => void }
 type Props = {
   data: TableData
+  queryControls?: ReactNode
   connectionID: string
   schema: string
   table: string
@@ -30,7 +32,7 @@ type ContextMenu = { x: number; y: number; cell: CellPosition | null }
 type InsertedRow = { row: DraftRow; beforeRowId: string | null }
 type RowPlacement = { target: DraftRow; side: 'above' | 'below'; column: number }
 
-const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, connectionID, schema, table, pageOffset, loading, readOnly, selectionVersion, search, onSearchChange, onDirtyChange, onSavingChange, onSaved, queryOptions = emptyTableQuery(), onSort }, ref) {
+const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, queryControls, connectionID, schema, table, pageOffset, loading, readOnly, selectionVersion, search, onSearchChange, onDirtyChange, onSavingChange, onSaved, queryOptions = emptyTableQuery(), onSort }, ref) {
   const baseRows = useMemo<DraftRow[]>(() => data.rows.map((original, index) => ({ id: `row-${index}`, original, identity: data.identities[index] ?? null, added: false })), [data])
   const [addedRows, setAddedRows] = useState<InsertedRow[]>([])
   const [edits, setEdits] = useState<RowEdits>({})
@@ -341,11 +343,14 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, con
 
   return <div className="editable-grid" ref={gridRef} onCopy={handleCopy} onKeyDown={keyDown}>
     <div className="grid-actions">
-      <Button type="button" onClick={() => addRow()} disabled={saving || loading || readOnly || !data.columns.length}><Icon name="plus" />Add row</Button>
+      <Button className="compact-toolbar-action" type="button" onClick={() => addRow()} disabled={saving || loading || readOnly || !data.columns.length}><Icon name="plus" />Add row</Button>
+      {queryControls}
+      <ActionGroup label="Table actions">
       <Button type="button" onClick={() => void copySelection()} disabled={!selection.size || saving}><Icon name="copy" />Copy CSV</Button>
       <ExportMenu generatedColumns={data.columns.filter((column) => column.generated && !column.identityGeneration).map((column) => column.name)} columns={data.columns.map((column) => column.name)} rows={visibleRows.map((row) => data.columns.map((column, index) => draftValue(row, column, index, resolvedEdits)))} selectedRows={selectedRows.map((row) => data.columns.map((column, index) => draftValue(row, column, index, resolvedEdits)))} table={{ databaseId: connectionID, schema, name: table, options: queryOptions }} fileName={table} />
-      {selection.size ? <span className="grid-selection-count">{selection.size} selected</span> : null}
       <label className="row-search"><Icon name="search" /><input value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Search this page" aria-label="Search this page" /></label>
+      </ActionGroup>
+      {selection.size ? <span className="grid-selection-count">{selection.size} selected</span> : null}
     </div>
     {dirty ? <div className="grid-change-bar" role="status">
       <span>{changes.length} unsaved {changes.length === 1 ? 'row change' : 'row changes'}</span>

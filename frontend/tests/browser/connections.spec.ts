@@ -273,3 +273,62 @@ test('starting a table draft cancels an older connection-open request', async ({
   await expect(page.getByRole('gridcell')).toHaveText('draft')
   await expect(page.getByRole('tab', {name:'items',exact:true})).toHaveAttribute('aria-selected','true')
 })
+
+test('large-text connection actions stay visible through errors and busy states', async ({ page }) => {
+  await page.route('**/bindings/changeme/internal/database/postgresservice.*', route => route.fulfill({ contentType: 'text/javascript', body: postgresFixture.replace("  state.creates.push({ url, name, showAllDatabases });", "  await new Promise(resolve => { window.finishConnect = resolve }); if (window.failConnect) throw new Error('Connection refused');\n  state.creates.push({ url, name, showAllDatabases });") }))
+  await page.evaluate(() => localStorage.setItem('hyperpg-font-size-px', '18'))
+  await page.setViewportSize({ width: 390, height: 600 })
+  await page.reload()
+  const opener = page.getByRole('button', { name: 'Workspace actions' })
+  await opener.click()
+  await page.getByRole('button', { name: 'Add connection', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'New connection' })
+  const hit = async (name: string) => {
+    const button = dialog.getByRole('button', { name, exact: true })
+    expect(await button.evaluate((element) => {
+      const rect = element.getBoundingClientRect()
+      const dialogRect = element.closest('[role="dialog"]')!.getBoundingClientRect()
+      return rect.left >= dialogRect.left && rect.right <= dialogRect.right && rect.top >= 0 && rect.bottom <= innerHeight && element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2))
+    })).toBe(true)
+  }
+  await hit('Cancel')
+  await hit('Connect database')
+  await dialog.getByLabel('Database URL', { exact: true }).fill('postgresql://user:password@localhost:5432/test')
+  await page.evaluate(() => { (window as any).failConnect = true })
+  await dialog.getByRole('button', { name: 'Connect database' }).click()
+  await expect(dialog.getByRole('button', { name: 'Connecting' })).toBeDisabled()
+  await hit('Connecting')
+  await page.evaluate(() => (window as any).finishConnect())
+  await expect(dialog.getByRole('alert')).toContainText('Connection refused')
+  await dialog.getByLabel('Database URL', { exact: true }).focus()
+  await expect(dialog.getByLabel('Database URL', { exact: true })).toBeFocused()
+  await hit('Connect database')
+  await hit('Cancel')
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(opener).toBeFocused()
+})
+
+test('connection dialog explanatory text is readable across themes', async ({ page }) => {
+  for (const theme of ['light', 'dark', 'cream', 'discord']) {
+    await page.evaluate(theme => localStorage.setItem('hyperpg-theme', theme), theme)
+    await page.reload()
+    await page.getByRole('button', { name: 'Add connection', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: 'New connection' })
+    for (const selector of ['.dialog-note span', '.connection-option small', '.field-label span']) {
+      const label = dialog.locator(selector)
+      await expect(label).toBeVisible()
+      const ratio = await label.evaluate(element => {
+        const parse = (value: string) => value.match(/[\d.]+/g)!.slice(0, 3).map(Number).map(v => { v /= 255; return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4 })
+        const luminance = (value: string) => { const [r,g,b] = parse(value); return .2126*r + .7152*g + .0722*b }
+        let surface: Element | null = element
+        while (surface && getComputedStyle(surface).backgroundColor === 'rgba(0, 0, 0, 0)') surface = surface.parentElement
+        const foreground = luminance(getComputedStyle(element).color)
+        const background = luminance(getComputedStyle(surface!).backgroundColor)
+        return (Math.max(foreground, background) + .05) / (Math.min(foreground, background) + .05)
+      })
+      expect(ratio, `${theme} ${selector}`).toBeGreaterThanOrEqual(4.5)
+    }
+    await page.keyboard.press('Escape')
+  }
+})

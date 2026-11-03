@@ -1,4 +1,6 @@
 import Button from './ui/Button'
+import ActionGroup, { actionFocusReturnTarget } from './ui/ActionGroup'
+import { acquireInert } from './ui/inert'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { PostgresService, UpdateService } from './services'
 import DataGrid, { type DataGridHandle } from './DataGrid'
@@ -112,6 +114,7 @@ function App() {
   const [activeTabId, setActiveTabId] = useState(() => initialWorkspace.current.activeTabId)
   const [history, setHistory] = useState<HistoryEntry[]>(readHistory)
   const [showHistory, setShowHistory] = useState(false)
+  const dialogOpener = useRef<HTMLElement | null>(null)
   const [renamingScript, setRenamingScript] = useState<WorkspaceTab | null>(null)
   const [scriptName, setScriptName] = useState('')
   const [historySearch, setHistorySearch] = useState('')
@@ -126,6 +129,8 @@ function App() {
   const [tableQuery, setTableQuery] = useState<TableQueryOptions>(emptyTableQuery)
   const queryKey = JSON.stringify(tableQuery)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const mobileNavButton = useRef<HTMLButtonElement>(null)
+  const mobileSidebar = useRef<HTMLElement>(null)
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     try {
       const savedWidth = Number(localStorage.getItem('hyperpg-sidebar-width'))
@@ -271,6 +276,55 @@ function App() {
     }
   }, [fontSizePx])
 
+  useLayoutEffect(() => {
+    if (!mobileNavOpen) return
+    const drawer = mobileSidebar.current
+    const mobile = window.matchMedia('(max-width: 560px)')
+    if (!drawer || !mobile.matches) { setMobileNavOpen(false); return }
+    const background = [...(drawer.parentElement?.children ?? [])].filter((element) =>
+      element !== drawer && !element.matches('.mobile-sidebar-scrim, .modal-backdrop'),
+    ) as HTMLElement[]
+    const releaseBackground = acquireInert(background)
+    const controls = () => [...drawer.querySelectorAll<HTMLElement>(
+      'button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])',
+    )].filter((element) => element.tabIndex >= 0 && element.getClientRects().length > 0)
+    const dialogOpen = () => !!document.querySelector('.modal-backdrop [role="dialog"]')
+    const focusFirst = () => controls()[0]?.focus()
+    focusFirst()
+    const keyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || dialogOpen()) return
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setMobileNavOpen(false)
+      } else if (event.key === 'Tab') {
+        const items = controls()
+        const first = items[0]
+        const last = items[items.length - 1]
+        if (!drawer.contains(document.activeElement) || event.shiftKey && document.activeElement === first || !event.shiftKey && document.activeElement === last) {
+          event.preventDefault()
+          ;(event.shiftKey ? last : first)?.focus()
+        }
+      }
+    }
+    const keepFocus = (event: FocusEvent) => {
+      if (!dialogOpen() && !drawer.contains(event.target as Node)) focusFirst()
+    }
+    const resized = () => { if (!mobile.matches) setMobileNavOpen(false) }
+    document.addEventListener('keydown', keyDown)
+    document.addEventListener('focusin', keepFocus)
+    mobile.addEventListener('change', resized)
+    return () => {
+      document.removeEventListener('keydown', keyDown)
+      document.removeEventListener('focusin', keepFocus)
+      mobile.removeEventListener('change', resized)
+      releaseBackground()
+      if (!dialogOpen()) {
+        if (mobileNavButton.current?.getClientRects().length) mobileNavButton.current.focus()
+        else drawer.querySelector<HTMLElement>('.settings-button')?.focus()
+      }
+    }
+  }, [mobileNavOpen])
+
   useEffect(() => {
     try {
       localStorage.setItem('hyperpg-sidebar-width', String(sidebarWidth))
@@ -371,8 +425,7 @@ function App() {
 
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const siblings = [...(backdrop.parentElement?.children ?? [])].filter((element) => element !== backdrop) as HTMLElement[]
-    const priorInertStates = siblings.map((element) => element.inert)
-    siblings.forEach((element) => { element.inert = true })
+    const releaseBackground = acquireInert(siblings)
 
     const focusableElements = () => [...dialog.querySelectorAll<HTMLElement>(
       'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
@@ -399,10 +452,11 @@ function App() {
 
     return () => {
       document.removeEventListener('keydown', keepFocusInDialog)
-      siblings.forEach((element, index) => { element.inert = priorInertStates[index] })
-      const opener = pendingNavigation ? pendingNavigationOpener.current : showSettingsDialog ? settingsDialogOpener.current : showConnectionDialog ? connectionDialogOpener.current : previouslyFocused
-      if (opener?.isConnected) opener.focus()
-      else previouslyFocused?.focus()
+      releaseBackground()
+      const opener = pendingNavigation ? pendingNavigationOpener.current : showSettingsDialog ? settingsDialogOpener.current : showConnectionDialog ? connectionDialogOpener.current : dialogOpener.current ?? previouslyFocused
+      const target = [opener, previouslyFocused, mobileNavButton.current, mobileSidebar.current?.querySelector<HTMLElement>('.settings-button')]
+        .find((element) => element?.isConnected && element.getClientRects().length && !element.closest('[inert]'))
+      target?.focus()
     }
   }, [showConnectionDialog, showSettingsDialog, scriptToClose, showHistory, renamingScript, pendingNavigation])
 
@@ -529,7 +583,7 @@ function App() {
   const guardNavigation = (action: () => void) => {
     if (savingChanges) return
     if (hasPendingChanges) {
-      pendingNavigationOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      pendingNavigationOpener.current = actionFocusReturnTarget()
       setPendingNavigation(() => action)
     }
     else action()
@@ -544,7 +598,7 @@ function App() {
   }
 
   const openConnectionDialog = () => {
-    connectionDialogOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    connectionDialogOpener.current = actionFocusReturnTarget()
     guardNavigation(() => {
       setConnectionError('')
       setConnectionUrl('')
@@ -557,7 +611,7 @@ function App() {
   }
 
   const editConnection = (connection: ConnectionInfo) => {
-    connectionDialogOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    connectionDialogOpener.current = actionFocusReturnTarget()
     guardNavigation(() => {
       setConnectionError('')
       setEditingConnectionId(connection.id)
@@ -570,7 +624,8 @@ function App() {
   }
 
   const openSettingsDialog = () => {
-    settingsDialogOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    settingsDialogOpener.current = mobileNavOpen ? mobileNavButton.current : document.activeElement instanceof HTMLElement ? document.activeElement : null
+    if (mobileNavOpen) setMobileNavOpen(false)
     setSettingsCategory('appearance')
     setShowSettingsDialog(true)
   }
@@ -807,7 +862,7 @@ function App() {
       setWorkspaceError('')
     } catch (error) { setWorkspaceError(errorMessage(error, 'Could not save the script.')) }
   }
-  const renameScript = (tab: WorkspaceTab) => { setScriptName(tab.title); setRenamingScript(tab) }
+  const renameScript = (tab: WorkspaceTab) => { dialogOpener.current = actionFocusReturnTarget(); setScriptName(tab.title); setRenamingScript(tab) }
   const filteredHistory = history.filter((entry) => `${entry.sql} ${entry.databaseName}`.toLowerCase().includes(historySearch.toLowerCase()))
   const openHistoryEntry = (entry: HistoryEntry) => guardNavigation(() => {
     setShowHistory(false)
@@ -815,7 +870,7 @@ function App() {
   })
   const closeTab = (tab: WorkspaceTab, confirmed = false) => {
     if (runningScripts.has(tab.id)) return
-    if (tab.kind === 'script' && (sqlDrafts[tab.id] ?? '') !== (tab.savedContent ?? '') && !confirmed) { setScriptToClose(tab); return }
+    if (tab.kind === 'script' && (sqlDrafts[tab.id] ?? '') !== (tab.savedContent ?? '') && !confirmed) { dialogOpener.current = actionFocusReturnTarget(); setScriptToClose(tab); return }
     const close = () => {
       connectionSelection.current++
       setOpeningConnectionId('')
@@ -849,7 +904,7 @@ function App() {
       const action = (Object.keys(shortcutLabels) as ShortcutAction[]).find((key) => shortcuts[key] && shortcuts[key] === pressed)
       if (!action) return
       event.preventDefault()
-      if (showSettingsDialog || showConnectionDialog || pendingNavigation || scriptToClose || showHistory || renamingScript || event.repeat) return
+      if (mobileNavOpen || showSettingsDialog || showConnectionDialog || pendingNavigation || scriptToClose || showHistory || renamingScript || event.repeat) return
       if (action === 'refresh' && !activeConnection || action === 'closeTab' && !activeTabId || action === 'newScript' && !activeConnection || action === 'runScript' && !showSql || action === 'saveChanges' && (showSql || !selectedTable || !hasPendingChanges || savingChanges)) return
       if (action === 'refresh') guardNavigation(() => setRefreshKey((value) => value + 1))
       else if (action === 'closeTab') { const tab = tabs.find((item) => item.id === activeTabId); if (tab) closeTab(tab) }
@@ -879,12 +934,15 @@ function App() {
 
   return (
     <div className={`app-shell ${resizingSidebar ? 'is-resizing-sidebar' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
-      <aside className={`sidebar ${mobileNavOpen ? 'is-mobile-open' : ''}`} id="database-sidebar">
+      <aside ref={mobileSidebar} className={`sidebar ${mobileNavOpen ? 'is-mobile-open' : ''}`} id="database-sidebar" role={mobileNavOpen ? 'dialog' : undefined} aria-modal={mobileNavOpen || undefined} aria-label="Database navigation">
         <div className="sidebar-section-heading">
           <span>Connections</span>
+          <div className="sidebar-heading-actions">
+          <Button className="mobile-drawer-close" variant="ghost" iconOnly size="sm" type="button" aria-label="Close navigation panel" title="Close navigation" onClick={() => setMobileNavOpen(false)}><Icon name="close" /></Button>
           <Button variant="ghost" iconOnly size="sm" type="button" onClick={openConnectionDialog} aria-label="Add a database connection" title="Add connection">
             <Icon name="plus" />
           </Button>
+          </div>
         </div>
 
         {connections.length === 0 ? (
@@ -926,21 +984,24 @@ function App() {
         onPointerCancel={handleSidebarPointerUp}
         onKeyDown={handleSidebarResizeKeyDown}
       />
-      {mobileNavOpen ? <button className="mobile-sidebar-scrim" type="button" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} /> : null}
+      {mobileNavOpen ? <button className="mobile-sidebar-scrim" type="button" tabIndex={-1} aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} /> : null}
 
       <main className="main-panel">
         <header className={`topbar ${activeConnection ? '' : 'is-empty'}`}>
           <div className="breadcrumbs">
-            <button className="mobile-nav-button" type="button" onClick={() => setMobileNavOpen((open) => !open)} aria-label="Open navigation" aria-expanded={mobileNavOpen}>
+            <button ref={mobileNavButton} className="mobile-nav-button" type="button" onClick={() => setMobileNavOpen((open) => !open)} aria-label="Open navigation" aria-expanded={mobileNavOpen}>
               <svg viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M3 5h12M3 9h12M3 13h12" /></svg>
             </button>
             {activeConnection ? <><span className="crumb-muted">{activeConnection.name}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className={selectedTable ? 'crumb-muted' : 'crumb-current'}>{selectedDatabase.name}</span>{selectedTable ? <><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-muted">{selectedTable.schema}</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg><span className="crumb-current">{selectedTable.name}</span></> : null}</> : null}
           </div>
           <div className="topbar-right">
-            {activeConnection ? <><Button type="button" onClick={newScript}>New SQL script</Button><Button type="button" onClick={() => void openScript()}>Open SQL</Button></> : null}
-            <Button type="button" onClick={() => setShowHistory(true)}>Query history</Button>
+            {activeConnection ? <Button type="button" className="compact-toolbar-action" aria-label="New SQL script" onClick={newScript}>New SQL</Button> : null}
+            <ActionGroup label="Workspace actions">
+            {activeConnection ? <Button type="button" onClick={() => void openScript()}>Open SQL</Button> : null}
+            <Button type="button" onClick={() => { dialogOpener.current = actionFocusReturnTarget(); setShowHistory(true) }}>Query history</Button>
             <input ref={fileInput} type="file" accept=".sql,text/plain,application/sql" hidden onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (file) void file.text().then((content) => guardNavigation(() => openScriptContent(file.name, content))).catch((error: unknown) => setWorkspaceError(errorMessage(error, 'Could not open the script.'))) }} />
             <Button type="button" onClick={openConnectionDialog}><Icon name="plus" /> Add connection</Button>
+            </ActionGroup>
           </div>
         </header>
 
@@ -951,7 +1012,7 @@ function App() {
               <button type="button" className="editor-tab-select" role="tab" id={`workspace-tab-${tab.id}`} aria-controls={`workspace-panel-${tab.id}`} aria-selected={activeTabId === tab.id} tabIndex={activeTabId === tab.id || (!activeTabId && tabs[0]?.id === tab.id) ? 0 : -1} aria-current={activeTabId === tab.id ? 'page' : undefined} title={`${tab.database.name}${tab.table ? ` · ${tab.table.schema}` : ''}`} onClick={() => { if (activeTabId !== tab.id || !tab.database.id) guardNavigation(() => activateTab(tab)) }}><Icon name={tab.kind === 'table' ? 'table' : 'edit'} /><span>{tab.title}</span></button>
               <Button variant="ghost" size="sm" iconOnly className="editor-tab-dismiss" disabled={runningScripts.has(tab.id)} aria-label={`Close ${tab.title}`} onClick={() => closeTab(tab)}><Icon name="close" /></Button>
             </div>)}</div> : null}
-            {tabs.filter((tab) => tab.kind === 'script').map((tab) => <div key={tab.id} className="script-tab-panel" id={`workspace-panel-${tab.id}`} role="tabpanel" aria-labelledby={`workspace-tab-${tab.id}`} hidden={activeTabId !== tab.id}><div className="script-file-actions"><Button onClick={() => void saveScript(tab)}>Save SQL</Button><Button onClick={() => renameScript(tab)}>Rename</Button><span className={`script-save-status${(sqlDrafts[tab.id] ?? '') !== (tab.savedContent ?? '') ? ' is-dirty' : ''}`}>{(sqlDrafts[tab.id] ?? '') !== (tab.savedContent ?? '') ? 'Unsaved changes' : tab.path ? 'Saved' : ''}</span></div><Suspense fallback={<span role="status">Loading editor…</span>}><SqlEditor onRunningChange={(running) => setRunningScripts((current) => { const next = new Set(current); if (running) next.add(tab.id); else next.delete(tab.id); return next })} active={activeTabId === tab.id && !showSettingsDialog} databaseId={tab.database.id} databaseName={tab.database.name} script={sqlDrafts[tab.id] ?? ''} onScriptChange={(script) => setSqlDrafts((drafts) => ({ ...drafts, [tab.id]: script }))} onExecuted={() => setScriptRefreshPending(true)} onHistory={(entry) => setHistory((current) => [{ ...entry, id: crypto.randomUUID(), connectionId: tab.connectionId, databaseName: tab.database.name }, ...current].slice(0, 200))} /></Suspense></div>)}
+            {tabs.filter((tab) => tab.kind === 'script').map((tab) => <div key={tab.id} className="script-tab-panel" id={`workspace-panel-${tab.id}`} role="tabpanel" aria-labelledby={`workspace-tab-${tab.id}`} hidden={activeTabId !== tab.id}><div className="script-file-actions"><Button className="compact-toolbar-action" onClick={() => void saveScript(tab)}>Save SQL</Button><ActionGroup label="File options"><Button onClick={() => renameScript(tab)}>Rename</Button></ActionGroup><span className={`script-save-status${(sqlDrafts[tab.id] ?? '') !== (tab.savedContent ?? '') ? ' is-dirty' : ''}`}>{(sqlDrafts[tab.id] ?? '') !== (tab.savedContent ?? '') ? 'Unsaved' : tab.path ? 'Saved' : ''}</span></div><Suspense fallback={<span role="status">Loading editor…</span>}><SqlEditor onRunningChange={(running) => setRunningScripts((current) => { const next = new Set(current); if (running) next.add(tab.id); else next.delete(tab.id); return next })} active={activeTabId === tab.id && !mobileNavOpen && !showSettingsDialog && !showConnectionDialog && !pendingNavigation && !scriptToClose && !showHistory && !renamingScript} databaseId={tab.database.id} databaseName={tab.database.name} script={sqlDrafts[tab.id] ?? ''} onScriptChange={(script) => setSqlDrafts((drafts) => ({ ...drafts, [tab.id]: script }))} onExecuted={() => setScriptRefreshPending(true)} onHistory={(entry) => setHistory((current) => [{ ...entry, id: crypto.randomUUID(), connectionId: tab.connectionId, databaseName: tab.database.name }, ...current].slice(0, 200))} /></Suspense></div>)}
             {!showSql && activeConnection ? <>
             {!selectedTable ? <section className="database-header">
               <div>
@@ -1004,9 +1065,9 @@ function App() {
                 <div className="table-workspace" id="table-view-panel" role="tabpanel" aria-labelledby={view === 'data' ? 'table-view-data-tab' : 'table-view-structure-tab'} tabIndex={0}>
                   {tableError ? <div className="notice notice-error" role="alert">{tableError}</div> : null}
                   {view === 'data' ? <>
-                    <TableQueryControls key={activeTabId} columns={tableData?.columns.map((column) => column.name) ?? []} value={tableQuery} disabled={tableBusy || savingChanges} onApply={(query) => guardNavigation(() => { setTableQuery(query); setPageOffset(0); setRowSearch('') })} />
                     {tableData ? <DataGrid
                       key={`${selectedDatabase.id}:${selectedTable.schema}:${selectedTable.name}:${pageOffset}:${cachedPage!.refreshKey}:${queryKey}`}
+                      queryControls={<TableQueryControls key={activeTabId} columns={tableData?.columns.map((column) => column.name) ?? []} value={tableQuery} disabled={tableBusy || savingChanges} onApply={(query) => guardNavigation(() => { setTableQuery(query); setPageOffset(0); setRowSearch('') })} />}
                       ref={gridRef} data={tableData} connectionID={selectedDatabase.id} schema={selectedTable.schema} table={selectedTable.name}
                       queryOptions={tableQuery} onSort={(column) => guardNavigation(() => { const previous = tableQuery.sort[0]; const direction = previous?.column === column && previous.direction === 'ASC' ? 'DESC' : 'ASC'; setTableQuery({ ...tableQuery, sort: [{ column, direction }] }); setPageOffset(0) })}
                       pageOffset={pageOffset} loading={tableBusy} readOnly={tableStale} selectionVersion={tableSelectionVersion} search={rowSearch} onSearchChange={setRowSearch} onDirtyChange={handleDirtyChange} onSavingChange={setSavingChanges}
@@ -1022,10 +1083,10 @@ function App() {
                       </select></label>
                       <span className="pagination-range">{pageStart.toLocaleString()}–{pageEnd.toLocaleString()} of {tableData.rowCount.toLocaleString()} rows</span>
                       <div className="pagination-actions">
-                        <Button type="button" aria-label="Start page" disabled={tableBusy || tableStale || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset(0))}><Icon name="chevrons-left" />Start</Button>
-                        <Button type="button" aria-label="Previous page" disabled={tableBusy || tableStale || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset((offset) => Math.max(0, offset - pageSize)))}><Icon name="chevron-left" />Previous</Button>
-                        <Button type="button" aria-label="Next page" disabled={tableBusy || tableStale || savingChanges || pageOffset + pageSize >= tableData.rowCount} onClick={() => guardNavigation(() => setPageOffset((offset) => offset + pageSize))}>Next<Icon name="chevron-right" /></Button>
-                        <Button type="button" aria-label="End page" disabled={tableBusy || tableStale || savingChanges || pageOffset >= lastPageOffset} onClick={() => guardNavigation(() => setPageOffset(lastPageOffset))}>End<Icon name="chevrons-right" /></Button>
+                        <Button type="button" aria-label="Start page" title="Start page" disabled={tableBusy || tableStale || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset(0))}><Icon name="chevrons-left" /><span className="pagination-label">Start</span></Button>
+                        <Button type="button" aria-label="Previous page" title="Previous page" disabled={tableBusy || tableStale || savingChanges || pageOffset === 0} onClick={() => guardNavigation(() => setPageOffset((offset) => Math.max(0, offset - pageSize)))}><Icon name="chevron-left" /><span className="pagination-label">Previous</span></Button>
+                        <Button type="button" aria-label="Next page" title="Next page" disabled={tableBusy || tableStale || savingChanges || pageOffset + pageSize >= tableData.rowCount} onClick={() => guardNavigation(() => setPageOffset((offset) => offset + pageSize))}><span className="pagination-label">Next</span><Icon name="chevron-right" /></Button>
+                        <Button type="button" aria-label="End page" title="End page" disabled={tableBusy || tableStale || savingChanges || pageOffset >= lastPageOffset} onClick={() => guardNavigation(() => setPageOffset(lastPageOffset))}><span className="pagination-label">End</span><Icon name="chevrons-right" /></Button>
                       </div>
                     </div> : null}
                   </> : <>
@@ -1134,11 +1195,12 @@ function App() {
       </div> : null}
 
       {showConnectionDialog ? <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !connecting) setShowConnectionDialog(false) }}>
-        <section className="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+        <section className="connection-dialog connection-form-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
           <button className="dialog-close" type="button" aria-label="Close" onClick={() => setShowConnectionDialog(false)} disabled={connecting}><svg viewBox="0 0 18 18" fill="none"><path d="m4 4 10 10M14 4 4 14" /></svg></button>
           <div className="dialog-icon"><DatabaseIcon /></div>
           <div className="dialog-heading"><h2 id="dialog-title">{editingConnectionId ? 'Edit connection' : 'New connection'}</h2></div>
           <form onSubmit={handleConnect}>
+            <div className="connection-form-body">
             <label className="field-label" htmlFor="connection-name">Connection name <span>Optional</span></label>
             <input id="connection-name" className="dialog-input" value={connectionName} onChange={(event) => setConnectionName(event.target.value)} placeholder="e.g. Production" autoComplete="off" disabled={connecting} />
             <label className="field-label connection-url-label" htmlFor="connection-url">Database URL</label>
@@ -1150,7 +1212,8 @@ function App() {
             </label>
             {connectionError ? <div className="form-error" role="alert"><svg viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="6.7" /><path d="M9 5.5v4M9 12.1v.1" /></svg>{connectionError}</div> : null}
             <div className="dialog-note"><svg viewBox="0 0 18 18" fill="none"><path d="M9 2.2 3.2 4.5v4.1c0 3.3 2.5 5.9 5.8 7.2 3.3-1.3 5.8-3.9 5.8-7.2V4.5L9 2.2Z" /><path d="m6.4 8.8 1.7 1.7 3.6-3.7" /></svg><span>Saved securely on this device.</span></div>
-            <div className="dialog-actions"><Button size="lg" type="button" onClick={() => setShowConnectionDialog(false)} disabled={connecting}>Cancel</Button><Button variant="primary" size="lg" type="submit" disabled={connecting || !editingConnectionId && !connectionUrl.trim()}>{connecting ? <><span className="button-spinner" />{editingConnectionId ? 'Saving' : 'Connecting'}</> : editingConnectionId ? 'Save connection' : 'Connect database'}</Button></div>
+            </div>
+            <div className="dialog-actions"><Button className="connection-form-action" size="lg" type="button" onClick={() => setShowConnectionDialog(false)} disabled={connecting}>Cancel</Button><Button className="connection-form-action" variant="primary" size="lg" type="submit" disabled={connecting || !editingConnectionId && !connectionUrl.trim()}>{connecting ? <><span className="button-spinner" />{editingConnectionId ? 'Saving' : 'Connecting'}</> : editingConnectionId ? 'Save connection' : 'Connect database'}</Button></div>
           </form>
         </section>
       </div> : null}

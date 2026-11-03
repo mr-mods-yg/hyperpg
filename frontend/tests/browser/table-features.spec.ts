@@ -52,6 +52,36 @@ test('exports loaded rows to a file and streams an entire table separately', asy
   await page.getByRole('button', { name: 'Save file' }).click()
   await expect.poll(() => page.evaluate(() => (window as any).featureState.exports[0])).toMatchObject({id:'test',schema:'public',table:'items',format:'json',options:{filters:[],sort:[]}})
 })
+
+test('nested export keeps busy and error states visible and allows retry', async ({ page }) => {
+  const failingOnce = fixture.replace(
+    'window.featureState.files.push({path,contents})',
+    `window.featureState.writeAttempts = (window.featureState.writeAttempts ?? 0) + 1;
+     if (window.featureState.writeAttempts === 1) {
+       await new Promise(resolve => { window.finishFailedExport = resolve });
+       throw new Error('Disk is full');
+     }
+     window.featureState.files.push({path,contents})`,
+  )
+  await page.route('**/bindings/changeme/internal/database/postgresservice.*', route => route.fulfill({ contentType: 'text/javascript', body: failingOnce }))
+  await page.evaluate(() => localStorage.setItem('hyperpg-font-size-px', '18'))
+  await page.setViewportSize({ width: 390, height: 600 })
+  await page.reload()
+  await expect(page.locator('[data-cell="0:1"]')).toHaveText('first')
+  const actions = page.getByRole('button', { name: 'Table actions' })
+  await actions.click()
+  await page.locator('.export-menu summary').click()
+  await page.getByRole('button', { name: 'Save file' }).click()
+  await expect(page.getByRole('button', { name: 'Exporting…' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Exporting…' })).toBeDisabled()
+  await expect(actions).toHaveAttribute('aria-expanded', 'true')
+  await page.evaluate(() => (window as any).finishFailedExport())
+  await expect(page.getByRole('alert')).toHaveText('Disk is full')
+  await expect(page.getByRole('alert')).toBeVisible()
+  await page.getByRole('button', { name: 'Save file' }).click()
+  await expect.poll(() => page.evaluate(() => (window as any).featureState.files.length)).toBe(1)
+  await expect(page.locator('.export-menu-panel')).toBeHidden()
+})
 test('shows keys and indexes and opens generated SQL in a script tab', async ({ page }) => {
   await page.getByRole('tab', { name: 'Structure', exact: true }).click()
   await expect(page.getByText('PRIMARY KEY (id)', { exact: true })).toBeVisible()
@@ -81,6 +111,7 @@ test('late generated SQL cannot replace a table draft after leaving Structure', 
 
 test('export stays visible in a short workspace and dismisses with Escape or outside click', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 700, height: 560 })
+  await page.getByRole('button', { name: 'Table actions' }).click()
   const trigger = page.locator('.export-menu summary')
   await trigger.click()
   const panel = page.locator('.export-menu-panel')
@@ -102,4 +133,76 @@ test('export stays visible in a short workspace and dismisses with Escape or out
   await trigger.click()
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
   await expect(panel).toBeHidden()
+})
+
+test('large text in a short narrow window keeps grid rows and pagination reachable', async ({ page }) => {
+  await page.evaluate(() => localStorage.setItem('hyperpg-font-size-px', '18'))
+  await page.setViewportSize({ width: 390, height: 600 })
+  await page.reload()
+  const first = page.locator('[data-cell="0:1"]')
+  await expect(first).toHaveText('first')
+  const firstId = page.locator('[data-cell="0:0"]')
+  const secondId = page.locator('[data-cell="1:0"]')
+  for (const row of [firstId, secondId]) {
+    const bounds = (await row.boundingBox())!
+    expect(bounds.y).toBeGreaterThanOrEqual(0)
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(600)
+    expect(await row.evaluate(element => { const rect = element.getBoundingClientRect(); return element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)) })).toBe(true)
+  }
+  await expect.poll(() => first.evaluate((element) => {
+    const rect = element.getBoundingClientRect()
+    return element.contains(document.elementFromPoint(Math.max(rect.left + 5, Math.min(rect.right - 5, innerWidth - 15)), rect.y + rect.height / 2))
+  })).toBe(true)
+  await first.click()
+  await expect(first).toBeFocused()
+  const pagination = page.locator('.pagination-actions')
+  expect(await pagination.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  await page.getByRole('button', { name: 'End page' }).click()
+  await expect(page.locator('.pagination-range')).toContainText('of 600 rows')
+})
+
+
+test('narrow table controls disclose search, export, and filters by keyboard', async ({ page }) => {
+  await page.evaluate(() => localStorage.setItem('hyperpg-font-size-px', '18'))
+  await page.setViewportSize({ width: 390, height: 600 })
+  await page.reload()
+  const trigger = page.getByRole('button', { name: 'Table actions' })
+  await trigger.focus()
+  await page.keyboard.press('Enter')
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+  await page.keyboard.press('Tab')
+  // Copy is disabled without a selection; Export remains reachable.
+  await expect(page.locator('.export-menu summary')).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(trigger).toBeFocused()
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  await trigger.click()
+  await page.getByRole('textbox', { name: 'Search this page' }).fill('second')
+  await expect(page.locator('[data-cell="0:1"]')).toHaveText('second')
+  await page.getByRole('button', { name: 'Filters', exact: true }).click()
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  await page.getByRole('button', { name: 'Add condition' }).click()
+  await expect(page.getByLabel('Filter 1 column')).toBeVisible()
+})
+
+test('Structure markers and secondary labels use readable text in all four themes', async ({ page }) => {
+  for (const theme of ['light', 'dark', 'cream', 'discord']) {
+    await page.evaluate((theme) => localStorage.setItem('hyperpg-theme', theme), theme)
+    await page.reload()
+    await page.getByRole('tab', { name: 'Structure', exact: true }).click()
+    for (const selector of ['.structure-empty', '.structure-intro span', '.workspace-identity > div > span']) {
+      const label = page.locator(selector).first()
+      await expect(label).toBeVisible()
+      const ratio = await label.evaluate((element) => {
+        const parse = (value: string) => value.match(/[\d.]+/g)!.slice(0, 3).map(Number).map(v => { v /= 255; return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4 })
+        const luminance = (value: string) => { const [r,g,b] = parse(value); return .2126*r + .7152*g + .0722*b }
+        let surface: Element | null = element
+        while (surface && (getComputedStyle(surface).backgroundColor === 'rgba(0, 0, 0, 0)' || getComputedStyle(surface).backgroundColor === 'transparent')) surface = surface.parentElement
+        const foreground = luminance(getComputedStyle(element).color)
+        const background = luminance(getComputedStyle(surface!).backgroundColor)
+        return (Math.max(foreground, background) + .05) / (Math.min(foreground, background) + .05)
+      })
+      expect(ratio, `${theme} ${selector}`).toBeGreaterThanOrEqual(4.5)
+    }
+  }
 })

@@ -1,0 +1,16 @@
+.action-group, .action-group-panel { display: contents; }
+.action-group > .action-group-trigger { display: none; }
+
+@container (max-width: 900px) {
+  .action-group { display: inline-flex; flex: none; }
+  .action-group > .action-group-trigger { display: inline-flex; }
+  .action-group-panel { display: none; }
+  .action-group.is-open > .action-group-panel {
+    position: fixed; z-index: 30; display: flex; flex-direction: column; align-items: stretch;
+    gap: 6px; overflow: auto; padding: 8px; background: var(--white);
+    border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: var(--shadow-modal);
+  }
+  .action-group-panel > .ui-button { justify-content: flex-start; width: 100%; }
+  .action-group-panel > .export-menu > summary { display: flex; width: 100%; justify-content: flex-start; }
+  .action-group-panel > .row-search { width: 100%; margin: 0; }
+}

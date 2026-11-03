@@ -1,0 +1,180 @@
+{
+  "target": 9,
+  "scale": 10,
+  "rubric": "docs/design-audit.md#rubric-and-scope",
+  "scoreMeaning": "Design judgments for inspected states, not objective certification. A 9 requires a polished, consistent inspected UI with accessible critical controls and no verified material issue.",
+  "categories": [
+    {
+      "id": "colors",
+      "label": "Colors and contrast"
+    },
+    {
+      "id": "typography",
+      "label": "Typography and readability"
+    },
+    {
+      "id": "hierarchy",
+      "label": "Visual hierarchy and navigation"
+    },
+    {
+      "id": "spacing",
+      "label": "Spacing, alignment, and density"
+    },
+    {
+      "id": "controls",
+      "label": "Shared components and interaction states"
+    },
+    {
+      "id": "accessibility",
+      "label": "Accessibility and keyboard behavior"
+    },
+    {
+      "id": "responsive",
+      "label": "Responsive and large-text layouts"
+    }
+  ],
+  "rounds": [
+    {
+      "id": "baseline",
+      "assessor": "Independent Terra Max baseline review",
+      "state": "Before production design-audit edits, HEAD 68ff6a9",
+      "scores": {
+        "colors": 7,
+        "typography": 7,
+        "hierarchy": 7,
+        "spacing": 6.5,
+        "controls": 6.5,
+        "accessibility": 6,
+        "responsive": 4.5
+      },
+      "evidenceDirectory": "/tmp/hyperpg-design-audit/baseline",
+      "interactionVerification": "Code inspection and rendered captures; no independent browser interaction exercise."
+    },
+    {
+      "id": "round-1",
+      "assessor": "Fresh independent Terra Max review",
+      "state": "Round-one code and rendered captures; worktree changes during review recorded in design-audit.md",
+      "scores": {
+        "colors": 8,
+        "typography": 7.5,
+        "hierarchy": 7.5,
+        "spacing": 6.5,
+        "controls": 7.5,
+        "accessibility": 7.5,
+        "responsive": 6
+      },
+      "evidenceDirectory": "/tmp/hyperpg-design-audit/round-1",
+      "openIssues": [
+        "Narrow toolbars crowd initial data/editor content.",
+        "Expanded SQL results can clip in a scrolled workspace.",
+        "Primary connection action initially below visible dialog area.",
+        "Structure empty-value markers have insufficient declared contrast."
+      ],
+      "interactionVerification": "Review inspected captures and code; implementation separately passed 61 browser and 12 unit tests."
+    },
+    {
+      "id": "round-2",
+      "assessor": "Fresh independent Terra Max review",
+      "state": "Stable 32-file production fingerprint 1bb2668a275ac7db4b6129137cb443456fd98e3ffb966388ea96f25453d4d31d",
+      "scores": {
+        "colors": 9,
+        "typography": 9,
+        "hierarchy": 8.5,
+        "spacing": 8.5,
+        "controls": 8.5,
+        "accessibility": 8.5,
+        "responsive": 8.5
+      },
+      "evidenceDirectory": "/tmp/hyperpg-design-audit/independent-round-2",
+      "report": "docs/design-audit-independent-round-2.md",
+      "openIssues": [
+        "Expanded SQL results intercept Settings in the open mobile navigation drawer at 390\u00d7600 with 18px text."
+      ],
+      "interactionVerification": "Independent existing selection 18/18; independent scenarios 3/4, with actual drawer hit-testing and pointer interception reproduced."
+    },
+    {
+      "id": "round-3",
+      "assessor": "Fresh independent Terra Max focused review",
+      "state": "Stable 32-file production fingerprint 58d72bbf62bba3e062a4615876fea9a1aacb330cb98fed12f06316d1728b273b",
+      "scores": {
+        "colors": 9,
+        "typography": 9,
+        "hierarchy": 8.5,
+        "spacing": 9,
+        "controls": 8.5,
+        "accessibility": 8.5,
+        "responsive": 8.5
+      },
+      "evidenceDirectory": "/tmp/hyperpg-design-audit/independent-round-3",
+      "report": "docs/design-audit-independent-round-3.md",
+      "openIssues": [
+        "The mobile navigation drawer permits forward Tab and activation of obscured background controls."
+      ],
+      "interactionVerification": "6/6 focused independent scenarios; an additional 1/1 deliberate keyboard-defect reproduction. Prior pointer interception is verified fixed."
+    },
+    {
+      "id": "round-4",
+      "assessor": "Fresh independent Terra Max focused review",
+      "state": "Stable 32-file production fingerprint 1a5d73dc55077f952c467e200d022dd03e09e374075729f80901c1268826edbf",
+      "scores": {
+        "colors": 9,
+        "typography": 9,
+        "hierarchy": 8.5,
+        "spacing": 8.5,
+        "controls": 8.5,
+        "accessibility": 8,
+        "responsive": 8
+      },
+      "evidenceDirectory": "/tmp/hyperpg-design-audit/independent-round-4",
+      "report": "docs/design-audit-independent-round-4.md",
+      "openIssues": [
+        "Drawer behavior uses a different overlay breakpoint from CSS.",
+        "Overlapping drawer and application dialog cleanup corrupts inert state during resizing.",
+        "Large-text drawer heading and close focus outline collide."
+      ],
+      "interactionVerification": "10/10 permanent selection; independent pointer, keyboard, tree/dialog and resize exercises identified the reported blockers."
+    },
+    {
+      "id": "round-5",
+      "assessor": "Fresh independent Terra Max final review",
+      "state": "Stable 33-file production fingerprint 5a8275901bb941d43e27a613c758c43bd48dd82f7d3b501585cf77137d46532c",
+      "scores": {
+        "colors": 9,
+        "typography": 9,
+        "hierarchy": 9,
+        "spacing": 9,
+        "controls": 9,
+        "accessibility": 9,
+        "responsive": 9
+      },
+      "evidenceDirectory": "/tmp/hyperpg-design-audit/independent-round-5",
+      "report": "docs/design-audit-independent-round-5.md",
+      "openIssues": [],
+      "interactionVerification": "12/12 permanent selection, 14/14 independent scenarios, and 3/3 corrected large-text/exact-boundary follow-up. Prior broad visual evidence carried where source is unchanged."
+    }
+  ],
+  "completion": "Achieved: all seven categories score 9/10 in the independent Round 5 review, on the same production fingerprint as the passing build and 74/74 full browser suite.",
+  "notes": [
+    "Implementation self-assessments are recorded separately in design-audit.md.",
+    "Scores in this file are independent reviews only.",
+    "Temporary screenshot paths are local evidence artifacts."
+  ],
+  "latestVerification": {
+    "productionFingerprint": "5a8275901bb941d43e27a613c758c43bd48dd82f7d3b501585cf77137d46532c",
+    "fileCount": 33,
+    "build": "passed after Round 5",
+    "browserSuite": {
+      "passed": 74,
+      "failed": 0,
+      "scope": "Full repository browser suite after Round 5",
+      "log": "/tmp/hyperpg-design-audit/root-round-5-full-browser.log"
+    },
+    "functionalTests": {
+      "passed": 12,
+      "failed": 0,
+      "scope": "Round 2 helper tests; tested helper sources unchanged in later rounds"
+    },
+    "diffCheck": "passed"
+  },
+  "finalReport": "docs/design-audit-independent-round-5.md"
+}

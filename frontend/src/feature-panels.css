@@ -1,4 +1,4 @@
-.table-query-controls { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 0; }
+.table-query-controls { display: contents; }
 .filter-panel { flex-basis: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); }
 .filter-row, .filter-actions, .generated-sql-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .filter-row input, .filter-row select { min-width: 0; min-height: calc(32px * var(--font-scale, 1)); padding: 4px 9px; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--input-surface); color: var(--ink); font: inherit; font-size: calc(12px * var(--font-scale, 1)); }

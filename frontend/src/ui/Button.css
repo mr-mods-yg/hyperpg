@@ -59,3 +59,12 @@
 @media (prefers-reduced-motion: reduce) {
   .ui-button { transition: none; }
 }
+
+@container (max-width: 900px) {
+  .ui-button.compact-toolbar-action, .ui-button.action-group-trigger { --button-padding: calc(5px * var(--font-scale, 1)); }
+  .pagination-actions .ui-button { width: var(--button-height); padding: 0; }
+  .pagination-actions .pagination-label { display: none; }
+}
+@media (max-width: 560px), (max-height: 700px) {
+  .ui-button.connection-form-action { --button-padding: calc(7px * var(--font-scale, 1)); }
+}

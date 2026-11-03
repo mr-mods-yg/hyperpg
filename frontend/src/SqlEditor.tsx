@@ -1,5 +1,7 @@
 import Button from './ui/Button'
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import ActionGroup from './ui/ActionGroup'
+import { createPortal } from 'react-dom'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { PostgresService } from './services'
 import { EditorState, Compartment } from '@codemirror/state'
 import { EditorView, lineNumbers, highlightActiveLine, highlightActiveLineGutter, keymap } from '@codemirror/view'
@@ -42,6 +44,8 @@ export default function SqlEditor({ onRunningChange, active, databaseId, databas
   const language = useRef(new Compartment())
   const [formatError, setFormatError] = useState('')
   const [resultsFocused, setResultsFocused] = useState(false)
+  const [expandedBounds, setExpandedBounds] = useState<CSSProperties>({})
+  const wasExpanded = useRef(false)
   useEffect(() => {
     if (!editorRef.current) return
     const view = new EditorView({ parent: editorRef.current, state: EditorState.create({ doc: script, extensions: [
@@ -108,6 +112,25 @@ export default function SqlEditor({ onRunningChange, active, databaseId, databas
   useLayoutEffect(() => {
     if (sourceRef.current) sourceRef.current.inert = resultsFocused
   }, [resultsFocused])
+  useLayoutEffect(() => {
+    if (!active && resultsFocused) { setResultsFocused(false); return }
+    if (resultsFocused) {
+      const place = () => {
+        const rect = workspaceRef.current?.getBoundingClientRect()
+        if (rect) setExpandedBounds({ top: rect.top + 8, left: rect.left + 8, width: Math.max(0, rect.width - 16), height: Math.max(0, rect.height - 16) })
+      }
+      place()
+      const observer = new ResizeObserver(place)
+      if (workspaceRef.current) observer.observe(workspaceRef.current)
+      window.addEventListener('resize', place)
+      window.addEventListener('scroll', place, true)
+      resultsToggleRef.current?.focus()
+      wasExpanded.current = true
+      return () => { observer.disconnect(); window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true) }
+    }
+    if (wasExpanded.current && active) resultsToggleRef.current?.focus()
+    wasExpanded.current = false
+  }, [resultsFocused, active])
   const selected = selection.start !== selection.end
   const sqlToRun = selected ? script.slice(selection.start, selection.end) : script
 
@@ -158,17 +181,19 @@ export default function SqlEditor({ onRunningChange, active, databaseId, databas
 
   return <section className="sql-workspace" ref={workspaceRef}>
     <div className="sql-source" ref={sourceRef} aria-hidden={resultsFocused || undefined}>
-    <div className="sql-heading"><div><h1>SQL editor</h1><span>{databaseName}</span></div><div className="sql-actions">
+    <div className="sql-heading"><div><h1>SQL editor</h1><span title={databaseName}>{databaseName}</span></div><div className="sql-actions">
+      <ActionGroup label="Editor actions">
       <Button type="button" disabled={running || !script} onClick={() => { onScriptChange(''); setSelection({ start: 0, end: 0 }); viewRef.current?.focus() }}>Clear</Button>
       <Button type="button" disabled={running || !script.trim()} onClick={() => { void import('sql-formatter').then(({ format }) => { if (viewRef.current?.state.doc.toString() !== script) return; onScriptChange(format(script, { language: 'postgresql', keywordCase: 'upper' })); setFormatError('') }).catch((cause: unknown) => setFormatError(cause instanceof Error ? cause.message : String(cause))) }}>Format</Button>
       <Button type="button" disabled={!databaseId || running || !script.trim()} onClick={() => void run(currentStatement(script, viewRef.current?.state.selection.main.head ?? 0))}>Run statement</Button>
-      <Button variant="primary" type="button" onClick={() => void run()} disabled={!databaseId || running || !sqlToRun.trim()}>{running ? <span className="button-spinner" /> : <Icon name="play" />}{running ? 'Running…' : selected ? 'Run selection' : 'Run script'}</Button>
+      </ActionGroup>
+      <Button className="compact-toolbar-action" variant="primary" type="button" onClick={() => void run()} disabled={!databaseId || running || !sqlToRun.trim()}>{running ? <span className="button-spinner" /> : <Icon name="play" />}{running ? 'Running…' : selected ? 'Run selection' : 'Run script'}</Button>
     </div></div>
     <div ref={editorRef} className="sql-editor" style={{ height: editorHeight ?? undefined }} />
     {formatError ? <div className="notice notice-error" role="alert">Could not format SQL: {formatError}</div> : null}
     <div className="sql-divider" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.round(100 * (editorHeight ?? editorRef.current?.clientHeight ?? 0) / Math.max(1, workspaceRef.current?.clientHeight ?? 1)))} role="separator" aria-label="Resize script and results" aria-orientation="horizontal" tabIndex={0} onPointerDown={(event) => { if (event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); resizeOrigin.current = event.clientY - (editorRef.current?.getBoundingClientRect().bottom ?? event.clientY) }} onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) resizeEditor(event.clientY - resizeOrigin.current) }} onKeyDown={(event) => { if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); const editor = editorRef.current; if (editor) resizeEditor(editor.getBoundingClientRect().bottom + (event.key === 'ArrowUp' ? -20 : 20)) } }} />
     </div>
-    <div id={resultsId} className={`sql-results${resultsFocused ? ' is-expanded' : ''}`} role="region" aria-label="Query results" aria-live="polite" onKeyDown={(event) => { if (event.key === 'Escape' && resultsFocused) { event.preventDefault(); event.stopPropagation(); setResultsFocused(false); resultsToggleRef.current?.focus() } }}>
+    {(() => { const results = <div id={resultsId} style={resultsFocused ? expandedBounds : undefined} className={`sql-results${resultsFocused ? ' is-expanded' : ''}`} role="region" aria-label="Query results" aria-live="polite" onKeyDown={(event) => { if (event.key === 'Escape' && resultsFocused) { event.preventDefault(); event.stopPropagation(); setResultsFocused(false) } }}>
       <div className="sql-results-heading">Results <div className="sql-result-actions"><span>{elapsedMs !== null ? `${elapsedMs} ms` : ''}</span><Button ref={resultsToggleRef} iconOnly type="button" aria-expanded={resultsFocused} aria-controls={resultsId} aria-label={resultsFocused ? 'Restore editor' : 'Expand results'} title={resultsFocused ? 'Restore editor' : 'Expand results'} onClick={() => setResultsFocused((value) => !value)}><Icon name={resultsFocused ? 'collapse' : 'expand'} /></Button></div></div>
       {copyMessage ? <div className="sql-message" role="status">{copyMessage}</div> : null}
       {error || execution?.error ? <div className="notice notice-error" role="alert">{error || execution?.error}</div> : null}
@@ -179,5 +204,6 @@ export default function SqlEditor({ onRunningChange, active, databaseId, databas
         {result.columns.length ? <div className="sql-table-wrap"><table><thead><tr>{result.columns.map((column, i) => <th key={i}>{column}</th>)}</tr></thead><tbody>{result.rows.map((row, i) => <tr key={i}>{row.map((value, j) => <td key={j}>{value === null ? <em>NULL</em> : value}</td>)}</tr>)}</tbody></table></div> : null}
       </div>)}
     </div>
+    return resultsFocused ? createPortal(results, document.body) : results })()}
   </section>
 }

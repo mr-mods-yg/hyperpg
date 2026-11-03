@@ -57,7 +57,7 @@
 .sql-divider:hover::after, .sql-divider:focus-visible::after { background: var(--accent); }
 .sql-divider:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
-.sql-results { flex: 1; min-height: 0; overflow: auto; }
+.sql-results { flex: 1; min-height: 0; overflow: auto; font-size: calc(12px * var(--font-scale, 1)); }
 .sql-results-heading { min-height: 32px; padding: 0 0 12px; font-weight: 600; }
 .sql-results-heading .sql-result-actions > span { color: var(--muted); font-weight: 400; font-size: calc(11px * var(--font-scale, 1)); font-variant-numeric: tabular-nums; }
 .sql-result { background: var(--white); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; }
@@ -78,7 +78,7 @@
 .sql-results-empty > .ui-icon { width: 24px; height: 24px; flex: none; margin-bottom: 4px; color: var(--quiet); }
 .sql-results-empty strong { color: var(--ink); font-weight: 500; }
 
-.sql-results.is-expanded { position: absolute; inset: 20px 24px; z-index: 1; padding: 16px; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: var(--shadow-modal); }
+.sql-results.is-expanded { position: fixed; z-index: 20; box-sizing: border-box; padding: 16px; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: var(--shadow-modal); }
 .sql-results.is-expanded .sql-results-heading { position: sticky; top: -16px; z-index: 1; background: var(--paper); padding-top: 4px; }
 
 @media (max-width: 1000px) {
@@ -87,6 +87,24 @@
 }
 @media (max-width: 560px) {
   .sql-workspace { padding: 16px 12px; gap: 12px; }
-  .sql-results.is-expanded { inset: 16px 12px; padding: 12px; }
+  .sql-results.is-expanded { padding: 12px; }
   .sql-results.is-expanded .sql-results-heading { top: -12px; }
+}
+
+/* Keep both panes reachable when toolbars occupy most of a short window. */
+@media (max-height: 700px) {
+  .sql-workspace { overflow-y: auto; }
+  .sql-editor { min-height: 120px; }
+  .sql-results { min-height: 150px; }
+  .sql-results.is-expanded { min-height: 0; }
+}
+
+@container (max-width: 900px) {
+  .sql-workspace { padding: 10px 12px; gap: 8px; }
+  .sql-heading { align-items: center; gap: 8px; }
+  .sql-heading h1 { margin: 0; }
+  .sql-heading > div:first-child { display: flex; min-width: 0; align-items: baseline; gap: 10px; }
+  .sql-heading > div:first-child > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sql-actions { gap: 6px; }
+  .sql-results-heading { padding-bottom: 6px; }
 }

@@ -128,7 +128,7 @@ function ConnectionBranch(props: BranchProps) {
 
   return <div className="connection-branch">
     <div className={`connection-wrap ${active ? 'is-active' : ''}`} onContextMenu={(event) => props.onContextMenu(connection, event, open)}>
-      <button className="connection-item" type="button" aria-label={`Select ${connection.name}`} aria-expanded={expanded} aria-controls={groupId} aria-busy={openingConnectionId === connection.id} onClick={() => {
+      <button className="connection-item" type="button" aria-label={`Select ${connection.name}`} title={connection.name} aria-expanded={expanded} aria-controls={groupId} aria-busy={openingConnectionId === connection.id} onClick={() => {
         setExpanded((value) => !value)
         if (!active) props.onSelectConnection(connection.id)
       }} onKeyDown={(event) => {
@@ -184,7 +184,7 @@ function DatabaseBranch(props: BranchProps & { database: string }) {
     schemas.set(table.schema, schemaTables)
   }
   return <div className="database-branch">
-    <button className={`database-nav-item ${active ? 'is-active' : ''}`} type="button" aria-label={`Open ${database} database`} aria-expanded={expanded} aria-controls={groupId} onClick={() => {
+    <button className={`database-nav-item ${active ? 'is-active' : ''}`} type="button" aria-label={`Open ${database} database`} title={database} aria-expanded={expanded} aria-controls={groupId} onClick={() => {
       setExpanded((value) => !value)
       if (!active) props.onSelectDatabase(connection, database)
     }}>
@@ -214,7 +214,7 @@ function SchemaBranch({ connection, database, schema, tables, active, selectedTa
   useEffect(() => { if (selectedSchema) setExpanded(true) }, [selectedSchema, selectedTable?.name])
 
   return <div className="schema-branch">
-    <button className={`database-nav-item schema-nav-item ${selectedSchema ? 'is-active' : ''}`} type="button" aria-label={`Toggle ${schema} schema`} aria-expanded={visible} aria-controls={groupId} onClick={() => setExpanded((value) => !value)}>
+    <button className={`database-nav-item schema-nav-item ${selectedSchema ? 'is-active' : ''}`} type="button" aria-label={`Toggle ${schema} schema`} title={schema} aria-expanded={visible} aria-controls={groupId} onClick={() => setExpanded((value) => !value)}>
       <Chevron expanded={visible} />
       <svg className="schema-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m3 5 5-3 5 3v6l-5 3-5-3zM3 5l5 3 5-3M8 8v6" /></svg>
       <span>{schema}</span><small>{tables.length}</small>

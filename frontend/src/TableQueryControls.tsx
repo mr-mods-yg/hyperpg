@@ -11,7 +11,7 @@ export default function TableQueryControls({ columns, value, disabled, onApply }
   useEffect(() => setDraft(value), [value])
   const change = (index: number, update: Partial<TableFilter>) => setDraft((current) => ({ ...current, filters: current.filters.map((filter, i) => i === index ? { ...filter, ...update } : filter) }))
   return <div className="table-query-controls">
-    <Button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>Filters{value.filters.length ? ` · ${value.filters.length}` : ''}</Button>
+    <Button className="compact-toolbar-action" type="button" aria-expanded={open} onClick={() => setOpen(!open)}>Filters{value.filters.length ? ` · ${value.filters.length}` : ''}</Button>
     {value.sort.length ? <Button type="button" disabled={disabled} onClick={() => onApply({ ...value, sort: [] })}>Clear sort</Button> : null}
     {open ? <form className="filter-panel" onSubmit={(event) => { event.preventDefault(); onApply(draft) }}>
       {draft.filters.map((filter, index) => <div className="filter-row" key={index}>
