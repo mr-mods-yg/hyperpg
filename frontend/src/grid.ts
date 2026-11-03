@@ -29,7 +29,7 @@ export function cellRange(start: CellPosition, end: CellPosition): Set<string> {
 
 // Keep disjoint selections in their grid positions; unselected cells inside
 // the bounding rectangle become empty fields. NULL/default also copy as empty.
-export function selectionCSV(rows: unknown[][], selection: Set<string>): string {
+export function selectionCSV(rows: unknown[][], selection: Set<string>, columns: string[]): string {
   const positions = [...selection].map((key) => key.split(':').map(Number))
     .filter(([row, column]) => row >= 0 && row < rows.length && column >= 0 && column < rows[row].length)
   if (!positions.length) return ''
@@ -38,12 +38,13 @@ export function selectionCSV(rows: unknown[][], selection: Set<string>): string 
     minRow = Math.min(minRow, row); maxRow = Math.max(maxRow, row)
     minColumn = Math.min(minColumn, column); maxColumn = Math.max(maxColumn, column)
   }
-  const lines: string[] = []
+  const csvField = (text: string) => /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+  const lines: string[] = [columns.slice(minColumn, maxColumn + 1).map(csvField).join(',')]
   for (let row = minRow; row <= maxRow; row++) {
     const fields: string[] = []
     for (let column = minColumn; column <= maxColumn; column++) {
       const text = selection.has(cellKey({ row, column })) ? valueText(rows[row][column]) : ''
-      fields.push(/[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text)
+      fields.push(csvField(text))
     }
     lines.push(fields.join(','))
   }

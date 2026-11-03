@@ -1,12 +1,17 @@
 .script-file-actions { display: flex; flex: none; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 24px; background: var(--paper); border-bottom: 1px solid var(--line); }
 .script-save-status { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; color: var(--muted); font-size: calc(11px * var(--font-scale, 1)); }
 .script-save-status.is-dirty::before { width: 5px; height: 5px; flex: none; background: var(--muted); border-radius: 50%; content: ''; }
-.history-dialog { width: min(680px, 90vw); }
-.history-list { max-height: 45vh; overflow: auto; margin: 12px 0; }
-.history-entry { display: flex; gap: 8px; align-items: center; border-bottom: 1px solid var(--line); padding: 8px 0; }
-.history-open { flex: 1; text-align: left; background: transparent; border: 0; color: inherit; min-width: 0; cursor: pointer; }
+.history-dialog { display: flex; flex-direction: column; width: min(680px, 90vw); overflow: hidden; }
+.history-dialog > .dialog-heading, .history-dialog > .dialog-input, .history-dialog > .dialog-actions { flex: none; }
+.history-list { flex: 0 1 auto; min-height: 0; max-height: 45vh; overflow: auto; margin: 12px 0; }
+.history-entry { display: flex; gap: 8px; align-items: center; min-width: 0; border-bottom: 1px solid var(--line); padding: 8px 2px; }
+.history-open { flex: 1; min-width: 0; padding: 4px; text-align: left; background: transparent; border: 0; border-radius: 5px; color: inherit; cursor: pointer; }
+.history-open:hover { background: var(--control-hover); }
+.history-open:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 .history-open code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.history-open small { display: block; margin-top: 4px; color: var(--muted); }
+.history-database { overflow-wrap: anywhere; }
+.history-open small { display: block; margin-top: 4px; color: var(--muted); line-height: 1.4; }
+.history-open small > span { display: block; }
 .script-tab-panel:not([hidden]) { display: flex; flex-direction: column; min-height: 0; }
 .script-tab-panel > .sql-workspace { flex: 1; min-height: 0; height: auto; }
 

@@ -97,3 +97,71 @@ test('a failed restored tab can be retried without changing its database', async
   await expect(page.getByRole('textbox', { name: 'SQL script' })).toHaveText('SELECT 1;')
   await expect(page.getByRole('alert')).toHaveCount(0)
 })
+
+test('long history entries keep actions reachable and keyboard focus after deletion', async ({ page }) => {
+  const longDatabase = 'analytics_reporting_database_with_an_extremely_long_unbroken_name_for_regional_customers'
+  const longSql = `SELECT ${'customer_identifier_'.repeat(12)} FROM accounts;`
+  await page.setViewportSize({ width: 390, height: 600 })
+  await page.addInitScript(({ longDatabase, longSql }) => {
+    localStorage.setItem('hyperpg-font-size-px', '18')
+    localStorage.setItem('hyperpg-query-history-v1', JSON.stringify(Array.from({ length: 10 }, (_, index) => ({
+      id: `entry-${index}`, sql: index === 0 ? longSql : `SELECT ${index};`, connectionId: 'saved', databaseName: index === 0 ? longDatabase : 'main', executedAt: 1735689600000, durationMs: 25, error: '',
+    }))))
+  }, { longDatabase, longSql })
+  await page.goto('/')
+  const workspaceActions = page.getByRole('button', { name: 'Workspace actions' })
+  await workspaceActions.click()
+  await page.getByRole('button', { name: 'Query history' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Query history' })
+  const search = dialog.getByLabel('Search query history')
+  await expect(search).toBeFocused()
+  const entries = dialog.locator('.history-entry')
+  const first = entries.first()
+  await expect(first.locator('code')).toHaveAttribute('title', longSql)
+  await expect(first.locator('.history-database')).toHaveAttribute('title', longDatabase)
+  expect(await first.locator('.history-database').evaluate(element =>
+    element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight,
+  )).toBe(true)
+  const boxes = await first.evaluate((entry) => {
+    const text = entry.querySelector('.history-database')!.getBoundingClientRect()
+    const remove = entry.querySelector('.ui-button')!.getBoundingClientRect()
+    return { textRight: text.right, removeLeft: remove.left }
+  })
+  expect(boxes.textRight).toBeLessThanOrEqual(boxes.removeLeft)
+  await search.fill('regional_customers')
+  await expect(entries).toHaveCount(1)
+  await search.fill('no matching SQL')
+  await expect(dialog.getByRole('status')).toContainText('No matching queries')
+  await search.fill('')
+  const deleteFirst = first.getByRole('button', { name: 'Delete history entry' })
+  await deleteFirst.focus()
+  await page.keyboard.press('Enter')
+  await expect(entries).toHaveCount(9)
+  await expect(entries.first().getByRole('button', { name: 'Delete history entry' })).toBeFocused()
+  const lastDelete = entries.last().getByRole('button', { name: 'Delete history entry' })
+  await lastDelete.scrollIntoViewIfNeeded()
+  await lastDelete.focus()
+  await page.keyboard.press('Enter')
+  await expect(entries).toHaveCount(8)
+  await expect(entries.last().getByRole('button', { name: 'Delete history entry' })).toBeFocused()
+  await page.setViewportSize({ width: 390, height: 420 })
+  const done = dialog.getByRole('button', { name: 'Done' })
+  const doneBounds = (await done.boundingBox())!
+  expect(doneBounds.y + doneBounds.height).toBeLessThanOrEqual(420)
+  await dialog.getByRole('button', { name: 'Clear history' }).click()
+  await expect(dialog.getByRole('status')).toContainText('No queries yet.')
+  await expect(search).toBeFocused()
+  await done.click()
+  await expect(workspaceActions).toBeFocused()
+})
+
+test('keyboard opens a complete long SQL history entry', async ({ page }) => {
+  const sql = `SELECT ${'customer_identifier_'.repeat(12)} FROM accounts;`
+  await page.addInitScript((sql) => localStorage.setItem('hyperpg-query-history-v1', JSON.stringify([{ id: 'long', sql, connectionId: 'saved', databaseName: 'main', executedAt: 1735689600000, durationMs: 25, error: '' }])), sql)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Query history' }).click()
+  await page.keyboard.press('Tab')
+  await expect(page.locator('.history-open')).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('textbox', { name: 'SQL script' })).toHaveText(sql)
+})

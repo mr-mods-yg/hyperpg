@@ -213,7 +213,7 @@ const DataGrid = forwardRef<DataGridHandle, Props>(function DataGrid({ data, que
   }
 
   function csvForSelection() {
-    return selectionCSV(visibleRows.map((row) => data.columns.map((column, index) => draftValue(row, column, index, resolvedEdits))), selection)
+    return selectionCSV(visibleRows.map((row) => data.columns.map((column, index) => draftValue(row, column, index, resolvedEdits))), selection, data.columns.map((column) => column.name))
   }
 
   function handleCopy(event: ClipboardEvent) {

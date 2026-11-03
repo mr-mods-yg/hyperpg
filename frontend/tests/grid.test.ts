@@ -13,13 +13,13 @@ test('range selection works in both drag directions and includes boundaries', ()
 
 test('CSV escapes commas, quotes, CR/LF, JSON and preserves exact numeric text', () => {
   const rows = [['a,b', 'say "hello"', 'one\ntwo'], [null, '9007199254740993', { answer: true }]]
-  assert.equal(selectionCSV(rows, cellRange({ row: 0, column: 0 }, { row: 1, column: 2 })), '"a,b","say ""hello""","one\ntwo"\r\n,9007199254740993,"{""answer"":true}"')
+  assert.equal(selectionCSV(rows, cellRange({ row: 0, column: 0 }, { row: 1, column: 2 }), ['first,heading', 'second', 'third']), '"first,heading",second,third\r\n"a,b","say ""hello""","one\ntwo"\r\n,9007199254740993,"{""answer"":true}"')
 })
 
 test('disjoint selections retain positions and omit unselected values', () => {
-  assert.equal(selectionCSV([['secret', 'chosen', 'hidden'], ['unused', 'skip', 'last']], new Set(['0:1', '1:2'])), 'chosen,\r\n,last')
-  assert.equal(selectionCSV([['a']], new Set()), '')
-  assert.equal(selectionCSV([['a']], new Set(['99:0'])), '')
+  assert.equal(selectionCSV([['secret', 'chosen', 'hidden'], ['unused', 'skip', 'last']], new Set(['0:1', '1:2']), ['ignored', 'middle', 'last']), 'middle,last\r\nchosen,\r\n,last')
+  assert.equal(selectionCSV([['a']], new Set(), ['value']), '')
+  assert.equal(selectionCSV([['a']], new Set(['99:0']), ['value']), '')
 })
 
 test('no-op editing and reverting remove pending changes', () => {

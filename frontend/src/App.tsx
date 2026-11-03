@@ -77,6 +77,8 @@ function App() {
   const [loadedTableData, setTableData] = useState<TableData | null>(null)
   const tablePage = useRef<CachedTablePage | null>(null)
   const gridRef = useRef<DataGridHandle>(null)
+  const tableWorkspace = useRef<HTMLDivElement>(null)
+  const filterRecovery = useRef(new Map<string, string[]>())
   const [hasPendingChanges, setHasPendingChanges] = useState(false)
   const handleDirtyChange = useCallback((dirty: boolean) => {
     if (dirty) { connectionSelection.current++; setOpeningConnectionId('') }
@@ -118,6 +120,8 @@ function App() {
   const [renamingScript, setRenamingScript] = useState<WorkspaceTab | null>(null)
   const [scriptName, setScriptName] = useState('')
   const [historySearch, setHistorySearch] = useState('')
+  const historySearchInput = useRef<HTMLInputElement>(null)
+  const historyDeleteButtons = useRef(new Map<string, HTMLButtonElement>())
   const [workspaceError, setWorkspaceError] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
   const [scriptToClose, setScriptToClose] = useState<WorkspaceTab | null>(null)
@@ -194,6 +198,7 @@ function App() {
   const sameTablePage = cachedPage && cachedPage.databaseId === selectedDatabase.id && cachedPage.schema === selectedTable?.schema &&
     cachedPage.table === selectedTable?.name && cachedPage.offset === pageOffset && cachedPage.queryKey === queryKey
   const tableData = sameTablePage ? loadedTableData : null
+  const recoveryColumns = filterRecovery.current.get(activeTabId)
   const tableStale = !!sameTablePage && cachedPage.refreshKey !== refreshKey
   const tableBusy = tableLoading || (tableStale && !tableError)
   const loadedBytes = useMemo(() => tableData?.rows.length ? new TextEncoder().encode(JSON.stringify(tableData.rows)).byteLength : 0, [tableData])
@@ -589,6 +594,18 @@ function App() {
     else action()
   }
 
+  const applyTableQuery = (query: TableQueryOptions) => guardNavigation(() => {
+    if (tableData) filterRecovery.current.set(activeTabId, tableData.columns.map((column) => column.name))
+    const queryChanged = JSON.stringify(query) !== queryKey || pageOffset !== 0
+    if (queryChanged || tableError) {
+      // The grid is replaced while the new page loads; keep keyboard focus on its stable container.
+      pendingNavigationOpener.current = tableWorkspace.current
+      tableWorkspace.current?.focus({ preventScroll: true })
+    }
+    if (!queryChanged && tableError) setRefreshKey((current) => current + 1)
+    setTableQuery(query); setPageOffset(0); setRowSearch('')
+  })
+
   const resolveNavigation = async (save: boolean) => {
     if (save && !(await gridRef.current?.save())) { setPendingNavigation(null); return }
     if (!save) gridRef.current?.discard()
@@ -864,6 +881,13 @@ function App() {
   }
   const renameScript = (tab: WorkspaceTab) => { dialogOpener.current = actionFocusReturnTarget(); setScriptName(tab.title); setRenamingScript(tab) }
   const filteredHistory = history.filter((entry) => `${entry.sql} ${entry.databaseName}`.toLowerCase().includes(historySearch.toLowerCase()))
+  const deleteHistoryEntry = (id: string) => {
+    const index = filteredHistory.findIndex((entry) => entry.id === id)
+    const neighbor = filteredHistory[index + 1] ?? filteredHistory[index - 1]
+    if (neighbor) historyDeleteButtons.current.get(neighbor.id)?.focus()
+    else historySearchInput.current?.focus()
+    setHistory((current) => current.filter((entry) => entry.id !== id))
+  }
   const openHistoryEntry = (entry: HistoryEntry) => guardNavigation(() => {
     setShowHistory(false)
     openScriptContent('History query', entry.sql, '', entry.connectionId, { name: entry.databaseName, id: '' })
@@ -878,6 +902,7 @@ function App() {
       const remaining = tabs.filter((item) => item.id !== tab.id)
       setTabs(remaining)
       delete tableTabState.current[tab.id]
+      filterRecovery.current.delete(tab.id)
       setSqlDrafts((drafts) => { const next = { ...drafts }; delete next[tab.id]; return next })
       if (activeTabId === tab.id) {
         const next = remaining[Math.min(index, remaining.length - 1)]
@@ -1062,12 +1087,13 @@ function App() {
                   </div> : tablesError ? <div className="notice notice-error">{tablesError}</div> : tablesLoading ? <div className="overview-loading"><span className="spinner" />Reading database schema…</div> : <div className="empty-database"><span className="empty-database-icon"><DatabaseIcon /></span><strong>No tables</strong><span>Tables will appear here as soon as they’re available.</span></div>}
                 </div>
               ) : (
-                <div className="table-workspace" id="table-view-panel" role="tabpanel" aria-labelledby={view === 'data' ? 'table-view-data-tab' : 'table-view-structure-tab'} tabIndex={0}>
+                <div ref={tableWorkspace} className="table-workspace" id="table-view-panel" role="tabpanel" aria-labelledby={view === 'data' ? 'table-view-data-tab' : 'table-view-structure-tab'} tabIndex={0}>
                   {tableError ? <div className="notice notice-error" role="alert">{tableError}</div> : null}
+                  {view === 'data' && tableError && !tableData && recoveryColumns ? <div className="filter-recovery"><TableQueryControls columns={recoveryColumns} value={tableQuery} disabled={tableBusy || savingChanges} onApply={applyTableQuery} initialOpen /></div> : null}
                   {view === 'data' ? <>
                     {tableData ? <DataGrid
                       key={`${selectedDatabase.id}:${selectedTable.schema}:${selectedTable.name}:${pageOffset}:${cachedPage!.refreshKey}:${queryKey}`}
-                      queryControls={<TableQueryControls key={activeTabId} columns={tableData?.columns.map((column) => column.name) ?? []} value={tableQuery} disabled={tableBusy || savingChanges} onApply={(query) => guardNavigation(() => { setTableQuery(query); setPageOffset(0); setRowSearch('') })} />}
+                      queryControls={<TableQueryControls key={activeTabId} columns={tableData.columns.map((column) => column.name)} value={tableQuery} disabled={tableBusy || savingChanges} onApply={applyTableQuery} />}
                       ref={gridRef} data={tableData} connectionID={selectedDatabase.id} schema={selectedTable.schema} table={selectedTable.name}
                       queryOptions={tableQuery} onSort={(column) => guardNavigation(() => { const previous = tableQuery.sort[0]; const direction = previous?.column === column && previous.direction === 'ASC' ? 'DESC' : 'ASC'; setTableQuery({ ...tableQuery, sort: [{ column, direction }] }); setPageOffset(0) })}
                       pageOffset={pageOffset} loading={tableBusy} readOnly={tableStale} selectionVersion={tableSelectionVersion} search={rowSearch} onSearchChange={setRowSearch} onDirtyChange={handleDirtyChange} onSavingChange={setSavingChanges}
@@ -1168,9 +1194,15 @@ function App() {
       {renamingScript ? <div className="modal-backdrop" role="presentation"><section className="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="rename-title"><div className="dialog-heading"><h2 id="rename-title">Rename script</h2></div><form onSubmit={(event) => { event.preventDefault(); const title = scriptName.trim(); if (!title) return; setTabs((current) => current.map((tab) => tab.id === renamingScript.id ? { ...tab, title } : tab)); setRenamingScript(null) }}><label className="field-label" htmlFor="script-name">Script name</label><input id="script-name" className="dialog-input" autoFocus value={scriptName} onChange={(event) => setScriptName(event.target.value)} /><div className="dialog-actions"><Button type="button" size="lg" onClick={() => setRenamingScript(null)}>Cancel</Button><Button type="submit" variant="primary" size="lg" disabled={!scriptName.trim()}>Rename</Button></div></form></section></div> : null}
       {showHistory ? <div className="modal-backdrop" role="presentation"><section className="connection-dialog history-dialog" role="dialog" aria-modal="true" aria-labelledby="history-title">
         <div className="dialog-heading"><h2 id="history-title">Query history</h2></div>
-        <input className="dialog-input" aria-label="Search query history" autoFocus placeholder="Search SQL or database" value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} />
-        <div className="history-list">{filteredHistory.map((entry) => <article className="history-entry" key={entry.id}><button type="button" className="history-open" onClick={() => openHistoryEntry(entry)}><code>{entry.sql}</code><small>{entry.databaseName} · {new Date(entry.executedAt).toLocaleString()} · {Math.round(entry.durationMs)} ms · {entry.error ? 'Failed' : 'Succeeded'}</small></button><Button variant="ghost" iconOnly aria-label="Delete history entry" onClick={() => setHistory((current) => current.filter((item) => item.id !== entry.id))}>×</Button></article>)}{!filteredHistory.length ? <div className="history-empty" role="status"><Icon name="search" /><strong>{history.length ? 'No matching queries' : 'No queries yet.'}</strong><span>{history.length ? 'Try another SQL fragment or database name.' : 'Run a query to add it to your history.'}</span></div> : null}</div>
-        <div className="dialog-actions"><Button type="button" size="lg" disabled={!history.length} onClick={() => setHistory([])}>Clear history</Button><Button type="button" variant="primary" size="lg" onClick={() => setShowHistory(false)}>Done</Button></div>
+        <input ref={historySearchInput} className="dialog-input" aria-label="Search query history" autoFocus placeholder="Search SQL or database" value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} />
+        <div className="history-list">{filteredHistory.map((entry) => <article className="history-entry" key={entry.id}>
+          <button type="button" className="history-open" onClick={() => openHistoryEntry(entry)}>
+            <code title={entry.sql}>{entry.sql}</code>
+            <small><span className="history-database" title={entry.databaseName}>{entry.databaseName}</span><span>{new Date(entry.executedAt).toLocaleString()} · {Math.round(entry.durationMs)} ms · {entry.error ? 'Failed' : 'Succeeded'}</span></small>
+          </button>
+          <Button ref={(button) => { if (button) historyDeleteButtons.current.set(entry.id, button); else historyDeleteButtons.current.delete(entry.id) }} variant="ghost" iconOnly aria-label="Delete history entry" onClick={() => deleteHistoryEntry(entry.id)}>×</Button>
+        </article>)}{!filteredHistory.length ? <div className="history-empty" role="status"><Icon name="search" /><strong>{history.length ? 'No matching queries' : 'No queries yet.'}</strong><span>{history.length ? 'Try another SQL fragment or database name.' : 'Run a query to add it to your history.'}</span></div> : null}</div>
+        <div className="dialog-actions"><Button type="button" size="lg" disabled={!history.length} onClick={() => { historySearchInput.current?.focus(); setHistory([]) }}>Clear history</Button><Button type="button" variant="primary" size="lg" onClick={() => setShowHistory(false)}>Done</Button></div>
       </section></div> : null}
 
       {scriptToClose ? <div className="modal-backdrop" role="presentation">
