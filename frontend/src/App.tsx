@@ -3,6 +3,7 @@ import ActionGroup, { actionFocusReturnTarget } from './ui/ActionGroup'
 import { acquireInert } from './ui/inert'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { PostgresService, UpdateService } from './services'
+import { createTtlCache } from './cache'
 import DataGrid, { type DataGridHandle } from './DataGrid'
 import type { TableData } from './grid'
 import ConnectionTree, { type ConnectionInfo, type TableInfo } from './ConnectionTree'
@@ -76,6 +77,7 @@ function App() {
   const [selectedTable, setSelectedTable] = useState<TableInfo | null>(null)
   const [loadedTableData, setTableData] = useState<TableData | null>(null)
   const tablePage = useRef<CachedTablePage | null>(null)
+  const [tablePageCache] = useState(() => createTtlCache<CachedTablePage>({ maxEntries: 25 }))
   const gridRef = useRef<DataGridHandle>(null)
   const tableWorkspace = useRef<HTMLDivElement>(null)
   const filterRecovery = useRef(new Map<string, string[]>())
@@ -511,21 +513,27 @@ function App() {
     const readPage = (limit: number, offset: number) => tableQuery.filters.length || tableQuery.sort.length
       ? PostgresService.GetFilteredTableData(selectedDatabase.id, selectedTable.schema, selectedTable.name, limit, offset, tableQuery)
       : PostgresService.GetTableData(selectedDatabase.id, selectedTable.schema, selectedTable.name, limit, offset)
+    const locationKey = tablePageKey(selectedDatabase.id, selectedTable.schema, selectedTable.name, pageOffset, queryKey)
+    // Reopening a tab primes `tablePage` from the cache, so the same page is
+    // reused instead of being read again. Refreshes, filters, sorts and paging
+    // never consult the cache: those are explicit requests for fresh rows.
     const current = tablePage.current
-    const sameLocation = current && current.databaseId === selectedDatabase.id && current.schema === selectedTable.schema &&
+    const sameLocation = !!current && current.databaseId === selectedDatabase.id && current.schema === selectedTable.schema &&
       current.table === selectedTable.name && current.offset === pageOffset && current.queryKey === queryKey
     const samePage = sameLocation && current.refreshKey === refreshKey
 
-    if (samePage && pageSize <= current.limit) {
+    if (samePage && current && pageSize <= current.limit) {
       current.appliedSize = pageSize
+      tablePage.current = current
       setTableData(sliceTablePage(current.data, pageSize))
       setTableLoading(false)
-    } else if (samePage) {
+    } else if (samePage && current) {
       // Read the last cached row again to detect a shift in the ordered page
       // before appending. A concurrent change falls back to a fresh page read.
       const overlap = current.data.rows.length > 0 ? 1 : 0
       const extraOffset = pageOffset + current.data.rows.length - overlap
       const extraLimit = pageSize - current.data.rows.length + overlap
+      tablePage.current = current
       setTableData(sliceTablePage(current.data, pageSize))
       setTableLoading(true)
       const loadMore = async () => {
@@ -548,6 +556,7 @@ function App() {
           current.data = data
           current.limit = pageSize
           current.appliedSize = pageSize
+          tablePageCache.set(locationKey, current)
           setTableData(sliceTablePage(data, pageSize))
         } catch (error: unknown) {
           if (!cancelled) {
@@ -560,9 +569,19 @@ function App() {
       }
       void loadMore()
     } else {
-      if (!sameLocation) {
-        tablePage.current = null
-        setTableData(null)
+      // Keep showing the current page while it refreshes, or fall back to a
+      // recently cached page for this location before clearing.
+      const displayed = tablePage.current
+      const displayedMatches = displayed && displayed.databaseId === selectedDatabase.id && displayed.schema === selectedTable.schema &&
+        displayed.table === selectedTable.name && displayed.offset === pageOffset && displayed.queryKey === queryKey
+      if (!displayedMatches) {
+        if (current) {
+          tablePage.current = current
+          setTableData(sliceTablePage(current.data, Math.min(current.appliedSize, pageSize)))
+        } else {
+          tablePage.current = null
+          setTableData(null)
+        }
       }
       setTableLoading(true)
       setTableError('')
@@ -570,7 +589,9 @@ function App() {
         .then((result) => {
           if (!cancelled) {
             const data = normalizeTableData(result)
-            tablePage.current = { queryKey, databaseId: selectedDatabase.id, schema: selectedTable.schema, table: selectedTable.name, offset: pageOffset, refreshKey, data, limit: pageSize, appliedSize: pageSize }
+            const page: CachedTablePage = { queryKey, databaseId: selectedDatabase.id, schema: selectedTable.schema, table: selectedTable.name, offset: pageOffset, refreshKey, data, limit: pageSize, appliedSize: pageSize }
+            tablePageCache.set(locationKey, page)
+            tablePage.current = page
             setTableData(data)
           }
         })
@@ -583,7 +604,7 @@ function App() {
     }
 
     return () => { cancelled = true }
-  }, [selectedDatabase.id, selectedTable?.schema, selectedTable?.name, pageSize, pageOffset, refreshKey, queryKey])
+  }, [selectedDatabase.id, selectedTable?.schema, selectedTable?.name, pageSize, pageOffset, refreshKey, queryKey, tablePageCache])
 
   const guardNavigation = (action: () => void) => {
     if (savingChanges) return
@@ -827,16 +848,28 @@ function App() {
 
   const activateResolvedTab = (tab: WorkspaceTab) => {
     const saved = tableTabState.current[tab.id]
+    const offset = saved?.offset ?? 0
+    const query = saved?.query ?? emptyTableQuery()
+    const size = saved?.size ?? 100
+    // Prime the next render with a cached page so switching tabs never flashes
+    // a loading state for data that was fetched moments ago.
+    if (tab.kind === 'table' && tab.table) {
+      const page = tablePageCache.get(tablePageKey(tab.database.id, tab.table.schema, tab.table.name, offset, JSON.stringify(query)))
+      if (page) {
+        tablePage.current = page
+        setTableData(sliceTablePage(page.data, Math.min(size, page.limit)))
+      }
+    }
     setSelectedConnectionId(tab.connectionId)
     setSelectedDatabase(tab.database)
     setSelectedTable(tab.table ?? null)
     setShowSql(tab.kind === 'script')
     setActiveTabId(tab.id)
-    setPageOffset(saved?.offset ?? 0)
-    setPageSize(saved?.size ?? 100)
+    setPageOffset(offset)
+    setPageSize(size)
     setRowSearch(saved?.search ?? '')
     setView(saved?.view ?? 'data')
-    setTableQuery(saved?.query ?? emptyTableQuery())
+    setTableQuery(query)
     setMobileNavOpen(false)
   }
 
@@ -1330,6 +1363,10 @@ function normalizeTableData(result: Awaited<ReturnType<typeof PostgresService.Ge
     rowCount: result.rowCount ?? 0,
     identities: result.identities ?? [],
   }
+}
+
+function tablePageKey(databaseId: string, schema: string, table: string, offset: number, queryKey: string) {
+  return JSON.stringify([databaseId, schema, table, offset, queryKey])
 }
 
 function sliceTablePage(data: TableData, limit: number): TableData {

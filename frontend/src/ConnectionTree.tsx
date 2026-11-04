@@ -1,6 +1,12 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { PostgresService } from './services'
 import './ConnectionTree.css'
+import { createTtlCache } from './cache'
+
+// The tree re-renders whenever a branch expands or collapses; cache the
+// listings so browsing does not hit the database again on every toggle.
+const databasesCache = createTtlCache<string[]>()
+const tablesCache = createTtlCache<TableInfo[]>()
 
 export type ConnectionInfo = {
   id: string
@@ -117,10 +123,24 @@ function ConnectionBranch(props: BranchProps) {
   useEffect(() => {
     if (!expanded) return
     let cancelled = false
+    const cacheKey = `${connection.id}:${connection.showAllDatabases ? 1 : 0}:${refreshKey}`
+    const cached = databasesCache.get(cacheKey)
+    if (cached) {
+      setDatabases(cached)
+      setLoading(false)
+      setError('')
+      return
+    }
+
     setLoading(true)
     setError('')
     PostgresService.ListDatabases(connection.id)
-      .then((result) => { if (!cancelled) setDatabases(result ?? []) })
+      .then((result) => {
+        if (cancelled) return
+        const items = result ?? []
+        databasesCache.set(cacheKey, items)
+        setDatabases(items)
+      })
       .catch((reason: unknown) => { if (!cancelled) setError(message(reason, 'Could not load databases.')) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -166,11 +186,25 @@ function DatabaseBranch(props: BranchProps & { database: string }) {
   useEffect(() => {
     if (!expanded) return
     let cancelled = false
+    const cacheKey = `${connection.id}:${database}:${refreshKey}`
+    const cached = tablesCache.get(cacheKey)
+    if (cached) {
+      setTables(cached)
+      setLoading(false)
+      setError('')
+      return
+    }
+
     setLoading(true)
     setError('')
     PostgresService.OpenDatabase(connection.id, database)
       .then((handle) => cancelled ? null : PostgresService.ListTables(handle))
-      .then((result) => { if (!cancelled) setTables(result ?? []) })
+      .then((result) => {
+        if (cancelled || result === null) return
+        const items = result ?? []
+        tablesCache.set(cacheKey, items)
+        setTables(items)
+      })
       .catch((reason: unknown) => { if (!cancelled) setError(message(reason, 'Could not load tables.')) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }

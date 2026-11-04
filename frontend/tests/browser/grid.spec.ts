@@ -11,7 +11,7 @@ const columns = [
 ];
 const state = window.gridTestState = {
   rows: Array.from({ length: 30 }, (_, i) => [String(i + 1), i === 0 ? 'alpha' : i === 1 ? 'beta' : 'row ' + (i + 1), i === 0 ? 'hello, "world"\\nline' : null, i !== 0]),
-  saves: [], failSave: false,
+  saves: [], failSave: false, reads: [],
 };
 const connection = { id: 'test', name: 'Test database', host: 'localhost', database: 'test', username: 'test', showAllDatabases: false };
 export async function ListSavedConnections() { return [connection]; }
@@ -20,6 +20,7 @@ export async function ListDatabases() { return ['test']; }
 export async function OpenDatabase() { return 'test'; }
 export async function ListTables() { return ['items', 'other', 'empty'].map(name => ({ schema: 'public', name })); }
 export async function GetTableData(_id, _schema, table, limit, offset) {
+  state.reads.push(table);
   const rows = table === 'empty' ? [] : state.rows;
   const page = rows.slice(offset, offset + limit);
   return { columns, rows: structuredClone(page), rowCount: rows.length,
@@ -60,6 +61,15 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Open items table', exact: true }).click()
   await expect(cell(page, 0, 1)).toHaveText('alpha')
+})
+
+test('switching back to a table restores cached rows without another read', async ({ page }) => {
+  expect((await state(page)).reads).toEqual(['items'])
+  await page.getByRole('button', { name: 'Open other table', exact: true }).click()
+  await expect(cell(page, 0, 1)).toHaveText('alpha')
+  await page.getByRole('button', { name: 'Open items table', exact: true }).click()
+  await expect(cell(page, 0, 1)).toHaveText('alpha')
+  expect((await state(page)).reads).toEqual(['items', 'other'])
 })
 
 test('drag, Shift, Ctrl and keyboard selection copy CSV through the browser clipboard', async ({ page }) => {

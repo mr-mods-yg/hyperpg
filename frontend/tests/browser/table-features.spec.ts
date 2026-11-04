@@ -348,6 +348,9 @@ test('failed empty filter queries keep the builder available for retry and corre
   await page.evaluate(() => { (window as any).featureState.blockUnfiltered = true })
   await page.getByRole('button', { name: 'Filters · 1' }).click()
   await page.getByRole('button', { name: 'Reset', exact: true }).click()
+  // Reset returns to a page cached moments ago, so request fresh rows before
+  // checking that the simulated read failure is surfaced.
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('Unfiltered read failed')
   await expect(page.getByRole('button', { name: 'Filters', exact: true })).toBeVisible()
   const attempts = await page.evaluate(() => (window as any).featureState.unfilteredReads)
@@ -419,6 +422,9 @@ test('filter recovery keeps the right columns after working in another table tab
   await expect(page.getByRole('button', { name: 'Filters · 1' })).toBeVisible()
   await page.evaluate(() => { (window as any).featureState.failItems = true })
   await page.getByRole('tab', { name: 'items', exact: true }).click()
+  // The tab reuses its cached page now, so request fresh rows to exercise
+  // the failure path before checking that the filter draft was retained.
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('Items query failed')
   await expect(page.getByLabel('Filter 1 value')).toHaveValue('items-value')
   await expect(page.getByLabel('Filter 1 column')).toHaveValue('id')
