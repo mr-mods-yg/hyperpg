@@ -4,7 +4,7 @@ HyperPG is a lightweight desktop client for browsing PostgreSQL databases. Paste
 
 ## Download
 
-The latest stable release is **[v1.0.10](https://github.com/mr-mods-yg/hyperpg/releases/tag/v1.0.10)**. Download the build for your system:
+The latest stable release is **[v1.0.11](https://github.com/mr-mods-yg/hyperpg/releases/tag/v1.0.11)**. Download the build for your system:
 
 - [Windows setup installer](https://github.com/mr-mods-yg/hyperpg/releases/latest/download/hyperpg-windows-amd64-setup.exe)
 - [Linux x64](https://github.com/mr-mods-yg/hyperpg/releases/latest/download/hyperpg-linux-amd64.tar.gz)

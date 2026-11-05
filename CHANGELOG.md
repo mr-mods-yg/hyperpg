@@ -4,10 +4,15 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ## [Unreleased]
 
+## [1.0.11] - 2026-11-05
+
 ### Changed
 
 - Use neutral accents in the light and dark themes and remove the sidebar branding.
 - Distinguish database, schema, and table names in the sidebar, and enlarge the Settings close button.
+- Improve responsive workspace layouts, filters, query history, and overlay accessibility.
+- Include column headings in CSV exports.
+- Cache schema trees and table pages with automatic expiration.
 
 ## [1.0.10] - 2026-11-02
 
