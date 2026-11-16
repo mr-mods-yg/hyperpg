@@ -21,6 +21,11 @@ type PostgresService struct {
 	mu          sync.RWMutex
 	connections map[string]*sql.DB
 	store       *localConnectionStore
+	scripts     scriptRegistry
+	// excelExports tracks running Excel exports (see xlsxexport.go).
+	excelExports excelExportRegistry
+	// guard keeps the window open while table edits are unsaved (see windowguard.go).
+	guard windowGuard
 }
 
 type ConnectionInfo struct {
