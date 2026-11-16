@@ -1,0 +1,60 @@
+/* App-level layout for markup owned by App.tsx. Colors come from style.css tokens. */
+
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+
+/* Notices: dismissible banners and recovery actions sit on the message line. */
+.dismissible-notice { display: flex; align-items: center; gap: var(--space-2); }
+.dismissible-notice > span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.dismissible-notice > .ui-button { flex: none; }
+.dismissible-notice > .ui-button--ghost { color: inherit; }
+.content-area > .compact-notice { margin: var(--space-2) var(--space-6) 0; }
+.notice-warning { color: var(--ink); background: var(--warning-pale); border: 1px solid var(--warning-border); }
+
+/* Table toolbar: the Data/Structure switcher leads the toolbar row instead of a separate header. */
+.workspace-section.has-selected-table .grid-actions .view-switcher { margin-left: 0; margin-right: var(--space-1); }
+.grid-actions > .workspace-refresh { flex: none; }
+.table-toolbar-spacer { flex: 1; }
+.table-toolbar-meta { min-width: 0; overflow: hidden; color: var(--muted); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+
+/* One footer under the grid: feedback and status on the left, paging on the right. */
+.grid-feedback-row.has-footer { flex: none; flex-wrap: wrap; gap: var(--space-1) var(--space-4); min-height: calc(44px * var(--font-scale)); padding-top: var(--space-1); border-top: 1px solid var(--line); }
+.grid-feedback-row.has-footer > .grid-feedback { flex: 1 1 160px; }
+.workspace-section.has-selected-table .grid-feedback-row .grid-pagination { min-height: 0; flex: 0 1 auto; flex-wrap: wrap; gap: var(--space-3); margin: 0 0 0 auto; padding: 0; border: 0; }
+.grid-feedback-row .pagination-range { margin-inline: 0; }
+.grid-feedback-row .table-status-metrics { color: var(--muted); font-size: var(--text-xs); }
+.grid-feedback-row .table-status-activity { color: var(--muted); font-size: var(--text-xs); }
+.grid-feedback-row .table-status-activity:empty { display: none; }
+.pagination-actions .ui-button[aria-disabled="true"] { cursor: progress; }
+
+/* Orphaned script: explain why Run is unavailable and offer another connection. */
+.script-orphan-notice { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin: var(--space-3) var(--space-6) 0; }
+.script-orphan-notice > span { min-width: 0; flex: 1 1 280px; }
+.script-orphan-picker { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+.script-orphan-picker select { height: var(--control-h-sm); padding: 0 var(--space-2); color: var(--ink); background: var(--input-surface); border: 1px solid var(--input-border); border-radius: var(--radius); font: inherit; }
+
+/* Update toast link. */
+.update-release-link { color: var(--accent-text); text-decoration: underline; text-underline-offset: 2px; }
+
+/* Keyboard shortcut labels render each key as <kbd>. */
+.shortcut-binding kbd, .shortcut-fixed-keys kbd, .tab-context-menu kbd {
+  display: inline-block; min-width: 1.6em; padding: 0 var(--space-1); color: var(--ink); background: var(--surface-raised);
+  border: 1px solid var(--line-strong); border-radius: var(--radius-xs); font: var(--text-xs)/1.5 var(--font-mono); text-align: center;
+}
+.shortcut-binding > span, .shortcut-fixed-keys > span { white-space: nowrap; }
+.shortcut-fixed-keys { color: var(--muted); }
+.shortcut-row.is-fixed { min-height: calc(40px * var(--font-scale)); }
+.shortcut-settings h3.fixed-shortcuts-heading { margin-top: var(--space-8); }
+.fixed-shortcuts-note { margin: 0 0 var(--space-2); color: var(--muted); font-size: var(--text-xs); }
+.shortcut-error { color: var(--danger); }
+
+@container (max-width: 900px) {
+  .grid-feedback-row .table-status-metrics, .grid-feedback-row .page-size-control > span { display: none; }
+  .workspace-section.has-selected-table .grid-feedback-row .grid-pagination { gap: var(--space-2); }
+}
+@media (max-width: 560px) {
+  .content-area > .compact-notice, .script-orphan-notice { margin-inline: var(--space-3); }
+}
+
+/* Edit connection: show what the saved URL currently points at. */
+.connection-current { margin: 6px 0 0; color: var(--muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.connection-current code { color: var(--ink); font-size: var(--text-xs); }

@@ -52,13 +52,13 @@ test('runs scripts, displays results, and keeps the draft', async ({ page }) => 
   await page.getByRole('button', { name: 'New SQL script' }).click()
   await expect(page.getByRole('textbox', { name: 'SQL script' })).toHaveText('')
   await page.getByRole('textbox', { name: 'SQL script' }).fill('SELECT 42;')
-  await page.getByRole('tab', { name: 'Script 1', exact: true }).click()
+  await page.getByRole('tab', { name: /^Script 1(, unsaved changes)?$/ }).click()
   await expect(editor).toHaveText("SELECT 'hello';")
   await expect(page.getByText('SELECT 2')).toBeVisible()
-  await page.getByRole('tab', { name: 'Script 2', exact: true }).click()
+  await page.getByRole('tab', { name: /^Script 2(, unsaved changes)?$/ }).click()
   await expect(page.getByRole('textbox', { name: 'SQL script' })).toHaveText('SELECT 42;')
   await page.getByRole('button', { name: 'Close Script 2' }).click()
-  await page.getByRole('button', { name: 'Close script', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Save changes to Script 2?' }).getByRole('button', { name: 'Don’t save', exact: true }).click()
   await expect(editor).toHaveText("SELECT 'hello';")
   await editor.fill("SELECT 1;\nSELECT 2;")
   await editor.focus()
@@ -91,9 +91,9 @@ test('configures shortcuts and applies them across settings and tabs', async ({ 
   await expect(page.getByRole('button', { name: 'Set shortcut for New SQL script' })).toHaveText('Ctrl+Shift+N')
   await page.getByRole('button', { name: 'Close settings' }).click()
   await page.keyboard.press('Control+Shift+n')
-  await expect(page.getByRole('tab', { name: 'Script 1', exact: true })).toBeVisible()
+  await expect(page.getByRole('tab', { name: /^Script 1(, unsaved changes)?$/ })).toBeVisible()
   await page.keyboard.press('Control+w')
-  await expect(page.getByRole('tab', { name: 'Script 1', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('tab', { name: /^Script 1(, unsaved changes)?$/ })).toHaveCount(0)
   const before = await page.evaluate(() => (window as any).sqlTestState.refreshes)
   await page.keyboard.press('F5')
   await expect.poll(() => page.evaluate(() => (window as any).sqlTestState.refreshes)).toBeGreaterThan(before)
@@ -113,15 +113,16 @@ export async function GetTableData() { return { columns: [{ name: 'value', dataT
   await page.getByRole('button', { name: 'New SQL script' }).click()
   await page.getByRole('textbox', { name: 'SQL script' }).fill('SELECT 1;')
   await page.getByRole('button', { name: 'Run script' }).click()
-  await expect(page.getByRole('button', { name: 'Close Script 1' })).toBeDisabled()
-  await page.getByRole('button', { name: 'Open items table', exact: true }).click()
+  // While the script runs, its close button cancels the query first.
+  await expect(page.getByRole('button', { name: 'Cancel query and close Script 1' })).toBeEnabled()
+  await page.getByRole('treeitem', { name: 'items', exact: true }).click()
   await page.locator('[data-cell="0:0"]').dblclick()
   await page.getByRole('textbox', { name: 'Edit value', exact: true }).fill('draft')
   await page.keyboard.press('Enter')
   await page.evaluate(() => (window as any).finishSQL())
   await expect(page.getByRole('button', { name: 'Close Script 1' })).toBeEnabled()
   await expect(page.locator('[data-cell="0:0"]')).toHaveText('draft')
-  await page.getByRole('tab', { name: 'Script 1', exact: true }).click()
+  await page.getByRole('tab', { name: /^Script 1(, unsaved changes)?$/ }).click()
   await expect(page.getByRole('dialog', { name: 'Unsaved changes' })).toBeVisible()
 })
 
@@ -214,7 +215,7 @@ test('tabs and settings respect the largest font size on narrow screens', async 
   await page.route('**/bindings/changeme/internal/updates/updateservice.*', route => route.fulfill({ contentType: 'text/javascript', body: 'export async function CheckForUpdates() { return { available: false } }' }))
   await page.goto('/')
   await page.getByRole('button', { name: 'New SQL script' }).click()
-  await expect(page.getByRole('tab', { name: 'Script 1', exact: true })).toHaveCSS('font-size', '18px')
+  await expect(page.getByRole('tab', { name: /^Script 1(, unsaved changes)?$/ })).toHaveCSS('font-size', '18px')
   expect((await page.locator('.editor-tab').boundingBox())!.height).toBeGreaterThanOrEqual(54)
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toHaveCSS('font-size', '30px')
@@ -225,7 +226,7 @@ test('tabs and settings respect the largest font size on narrow screens', async 
   expect(await page.locator('.settings-content').evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('large-font-settings.png') })
   await page.getByRole('button', { name: 'Close settings' }).click()
-  await expect(page.getByRole('tab', { name: 'Script 1', exact: true })).toBeVisible()
+  await expect(page.getByRole('tab', { name: /^Script 1(, unsaved changes)?$/ })).toBeVisible()
 })
 
 test('short SQL workspace shows useful panes and expanded results survive scrolling', async ({ page }) => {
@@ -328,8 +329,7 @@ test('opening app dialogs collapses expanded results without stealing dialog foc
   await page.getByRole('button', { name: 'Run script' }).click()
   for (const [group, action, dialogName] of [
     ['Workspace actions', 'Query history', 'Query history'],
-    ['Workspace actions', 'Add connection', 'New connection'],
-    ['File options', 'Rename', 'Rename script'],
+    ['Workspace actions', 'Add connection', 'Add connection'],
   ]) {
     await page.getByRole('button', { name: 'Expand results' }).click()
     await page.getByRole('button', { name: group }).click()
@@ -392,7 +392,7 @@ for (const theme of ['light', 'dark']) {
       await expect(drawer.getByRole('button', { name: 'Close navigation panel' })).toBeFocused()
       const heading = (await drawer.locator('.sidebar-section-heading > span').boundingBox())!
       const close = (await drawer.getByRole('button', { name: 'Close navigation panel' }).boundingBox())!
-      const add = (await drawer.getByRole('button', { name: 'Add a database connection' }).boundingBox())!
+      const add = (await drawer.getByRole('button', { name: 'Add connection', exact: true }).boundingBox())!
       const sidebar = (await drawer.boundingBox())!
       expect(close.x - heading.x - heading.width).toBeGreaterThanOrEqual(8)
       expect(add.x + add.width).toBeLessThanOrEqual(sidebar.x + sidebar.width - 4)
@@ -408,20 +408,20 @@ for (const theme of ['light', 'dark']) {
           })).toBe(true)
         }
       }
-      await drawer.getByRole('button', { name: 'Add a database connection' }).focus()
+      await drawer.getByRole('button', { name: 'Add connection', exact: true }).focus()
       await page.keyboard.press('Enter')
-      const dialog = page.getByRole('dialog', { name: 'New connection', exact: true })
+      const dialog = page.getByRole('dialog', { name: 'Add connection', exact: true })
       await expect(dialog).toBeVisible()
       await page.keyboard.press('Tab')
       expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true)
       await page.keyboard.press('Escape')
       await expect(dialog).toHaveCount(0)
-      await expect(drawer.getByRole('button', { name: 'Add a database connection' })).toBeFocused()
+      await expect(drawer.getByRole('button', { name: 'Add connection', exact: true })).toBeFocused()
       await page.keyboard.press('Escape')
       await expect(navigation).toBeFocused()
       expect(await page.locator('.main-panel').evaluate(element => (element as HTMLElement).inert)).toBe(false)
-      await expect(page.getByRole('tab', { name: 'Script 1', exact: true })).toBeVisible()
-      await expect(page.getByRole('tab', { name: 'Script 2', exact: true })).toHaveCount(0)
+      await expect(page.getByRole('tab', { name: /^Script 1(, unsaved changes)?$/ })).toBeVisible()
+      await expect(page.getByRole('tab', { name: /^Script 2(, unsaved changes)?$/ })).toHaveCount(0)
       await expect(editor).toHaveText('SELECT 1;')
     }
     await navigation.click()
@@ -451,12 +451,12 @@ for (const theme of ['light', 'dark']) {
       for (const nestedDialog of [false, true]) {
         await page.setViewportSize({ width: 390, height: 600 })
         await navigation.click()
-        if (nestedDialog) await page.getByRole('button', { name: 'Add a database connection' }).click()
+        if (nestedDialog) await page.locator('#database-sidebar').getByRole('button', { name: 'Add connection', exact: true }).click()
         await page.setViewportSize({ width, height: 600 })
         await expect(page.locator('.sidebar')).not.toHaveClass(/is-mobile-open/)
         await expect(page.locator('.mobile-drawer-close')).toBeHidden()
         if (nestedDialog) {
-          const dialog = page.getByRole('dialog', { name: 'New connection', exact: true })
+          const dialog = page.getByRole('dialog', { name: 'Add connection', exact: true })
           await editor.evaluate(element => (element as HTMLElement).focus())
           expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true)
           expect(await page.locator('.main-panel').evaluate(element => (element as HTMLElement).inert)).toBe(true)
@@ -472,7 +472,7 @@ for (const theme of ['light', 'dark']) {
     }
     await page.setViewportSize({ width: 390, height: 600 })
     await navigation.click()
-    await page.getByRole('button', { name: 'Add a database connection' }).click()
+    await page.locator('#database-sidebar').getByRole('button', { name: 'Add connection', exact: true }).click()
     await page.setViewportSize({ width: 600, height: 600 })
     await expect(page.locator('.sidebar')).not.toHaveClass(/is-mobile-open/)
     await page.setViewportSize({ width: 390, height: 600 })

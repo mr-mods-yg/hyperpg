@@ -37,7 +37,7 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/bindings/changeme/internal/database/postgresservice.*', route => route.fulfill({ contentType: 'text/javascript', body: postgresFixture }))
   await page.route('**/bindings/changeme/internal/updates/updateservice.*', route => route.fulfill({ contentType: 'text/javascript', body: 'export async function CheckForUpdates() { return { available: false, version: "dev", releaseUrl: "" } }' }))
   await page.goto('/')
-  await page.getByRole('button', { name: 'Open items table', exact: true }).click()
+  await page.getByRole('treeitem', { name: 'items', exact: true }).click()
   await expect(grid(page).getByRole('rowheader')).toHaveCount(100)
 })
 
@@ -64,7 +64,8 @@ test('resizes in place, reuses cached rows and appends the missing range', async
   await expect(page.getByRole('button', { name: 'Add row' })).toBeDisabled()
   await expect(page.locator('.table-loading')).toHaveCount(0)
   await expect(page.locator('.table-status-activity')).toHaveText('Loading rows…')
-  await expect(page.getByRole('progressbar')).toHaveCount(0)
+  // Existing rows stay visible with a slim progress bar while the rest load.
+  await expect(page.getByRole('progressbar', { name: 'Loading rows' })).toBeVisible()
   expect(await page.evaluate(() => {
     const state = (window as any).pageSizeTest
     return { sameGrid: state.grid === document.querySelector('.data-grid-scroll'), sameRow: state.firstRow === document.querySelector('[data-cell="4:0"]'), scrollTop: state.grid.scrollTop, before: state.scrollTop, reads: state.reads }
@@ -110,7 +111,7 @@ test('preserves the current page start and guards unsaved edits', async ({ page 
   expect(await page.evaluate(() => (window as any).pageSizeTest.reads)).toEqual([{ limit: 100, offset: 0 }, { limit: 25, offset: 25 }, { limit: 26, offset: 49 }])
   await page.getByRole('button', { name: 'Next page' }).click()
   await expect(row(page, 0)).toHaveText('76')
-  await page.getByRole('button', { name: 'End page' }).click()
+  await page.getByRole('button', { name: 'Last page' }).click()
   await expect(row(page, 0)).toHaveText('576')
   await page.getByRole('button', { name: 'Previous page' }).click()
   await expect(row(page, 0)).toHaveText('526')
@@ -175,7 +176,7 @@ test('does not apply a pending resize after switching tables', async ({ page }) 
   await size(page).selectOption('250')
   await expect.poll(() => page.evaluate(() => (window as any).pageSizeTest.pending.length)).toBe(1)
   await page.evaluate(() => { (window as any).pageSizeTest.hold = false })
-  await page.getByRole('button', { name: 'Open other table' }).click()
+  await page.getByRole('treeitem', { name: 'other' }).click()
   await expect(page.getByRole('grid', { name: 'public.other data' })).toBeVisible()
   await expect(row(page, 0)).toHaveText('other')
   await page.evaluate(() => (window as any).pageSizeTest.pending.shift().resolve())

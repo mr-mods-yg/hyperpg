@@ -12,7 +12,7 @@
 }
 
 .schema-tables .table-nav-item > span:nth-child(2) {
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: calc(11px * var(--font-scale, 1));
   font-weight: 400;
   letter-spacing: 0;
@@ -26,3 +26,51 @@
   font-variant-numeric: tabular-nums;
   font-weight: 400;
 }
+
+/* Tree structure and keyboard focus. */
+.connection-tree { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.connection-tree .tree-node { cursor: pointer; user-select: none; outline: none; }
+.connection-tree .tree-node:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; border-radius: 5px; }
+.connection-wrap:focus-within .connection-close { opacity: 1; }
+
+/* Class hooks for selection styling: .is-active (connection/database/schema
+   on the current path) and .table-nav-entry.is-selected (current table). */
+
+/* One icon set; size icons consistently in the tree. */
+.connection-tree .ui-icon.tree-chevron { flex: 0 0 12px; width: 12px; height: 12px; }
+.connection-tree .ui-icon.tree-database-icon,
+.connection-tree .ui-icon.schema-icon { flex: 0 0 14px; width: 14px; height: 14px; stroke-width: 1.5; }
+.connection-tree .table-grid-icon .ui-icon { width: 14px; height: 14px; stroke-width: 1.5; }
+.connection-tree .connection-close .ui-icon { width: 14px; height: 14px; stroke-width: 1.5; }
+.sidebar-search > .ui-icon { flex: 0 0 14px; width: 14px; height: 14px; }
+
+/* Names truncate with an ellipsis; the line box leaves room for underscores. */
+.connection-tree .tree-label,
+.connection-copy strong,
+.connection-copy small {
+  overflow: hidden;
+  min-width: 0;
+  padding-block: 1px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.connection-tree .database-nav-item > .tree-label { flex: 1 1 auto; }
+
+.sidebar-search-clear {
+  display: grid; flex: none; width: 20px; height: 20px; padding: 0; place-items: center;
+  color: var(--muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer;
+}
+.sidebar-search-clear:hover { color: var(--ink); background: var(--control-hover); }
+.sidebar-search-clear:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.sidebar-search-clear .ui-icon { width: 12px; height: 12px; }
+
+.connection-context-menu .grid-menu-details { max-width: 260px; }
+
+/* Delete confirmation (native modal dialog). */
+dialog.confirm-dialog { position: fixed; inset: 0; width: min(440px, calc(100vw - 32px)); height: fit-content; max-height: calc(100vh - 32px); margin: auto; overflow: auto; }
+dialog.confirm-dialog::backdrop { background: color-mix(in srgb, var(--ink) 38%, transparent); backdrop-filter: blur(3px); }
+.confirm-dialog p { margin: 12px 0 0; color: var(--muted); font-size: calc(12px * var(--font-scale, 1)); line-height: 1.6; }
+.confirm-dialog p strong { color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+.confirm-dialog .danger-button { color: var(--danger); background: var(--danger-pale); border-color: var(--danger-border); }
+.confirm-dialog .danger-button:not(:disabled):hover { color: var(--danger); background: var(--danger-pale); border-color: var(--danger); }

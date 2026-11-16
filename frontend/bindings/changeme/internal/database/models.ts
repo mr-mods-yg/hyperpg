@@ -22,6 +22,90 @@ export interface ConnectionInfo {
     "showAllDatabases": boolean;
 }
 
+export interface ExcelExportOptions {
+    /**
+     * ExportID lets the frontend poll GetExcelExportProgress and call CancelExcelExport.
+     */
+    "exportId": string;
+
+    /**
+     * Tables lists the relations to export. Empty exports every base table
+     * (and every view when IncludeViews is set).
+     */
+    "tables": TableInfo[] | null;
+    "includeViews": boolean;
+}
+
+export interface ExcelExportProgress {
+    /**
+     * Active is false before the export starts and after it finishes.
+     */
+    "active": boolean;
+
+    /**
+     * Phase is "preparing", "exporting" or "saving".
+     */
+    "phase": string;
+    "tableIndex": number;
+    "tableCount": number;
+    "schema": string;
+    "table": string;
+    "tableRows": number;
+    "totalRows": number;
+}
+
+export interface ExcelExportResult {
+    /**
+     * Path is empty when the user dismissed the save dialog.
+     */
+    "path": string;
+    "sheets": ExcelSheetResult[] | null;
+    "totalRows": number;
+    "warnings": string[] | null;
+    "cancelled": boolean;
+}
+
+/**
+ * ExcelExportTable is a relation that can be exported as a worksheet.
+ */
+export interface ExcelExportTable {
+    "schema": string;
+    "name": string;
+
+    /**
+     * Kind is "table", "view" or "materialized view".
+     */
+    "kind": string;
+
+    /**
+     * EstimatedRows is PostgreSQL's planner estimate, or -1 when unknown.
+     */
+    "estimatedRows": number;
+
+    /**
+     * Readable is false when the current role cannot SELECT from the relation.
+     */
+    "readable": boolean;
+}
+
+export interface ExcelSheetResult {
+    "sheet": string;
+    "schema": string;
+    "table": string;
+    "kind": string;
+    "rows": number;
+
+    /**
+     * RowsTruncated is true when the relation had more rows than fit in a sheet.
+     */
+    "rowsTruncated": boolean;
+
+    /**
+     * TruncatedCells counts values cut to Excel's 32,767-character cell limit.
+     */
+    "truncatedCells": number;
+}
+
 /**
  * RowIdentity identifies one physical row version, including partitioned tables
  * and tables without a primary key. xmin prevents overwriting concurrent edits.
@@ -48,6 +132,32 @@ export interface ScriptExecution {
     "results": ScriptResult[] | null;
     "error": string;
     "rolledBack": boolean;
+
+    /**
+     * Cancelled is true when CancelSQLScript stopped the script.
+     */
+    "cancelled": boolean;
+
+    /**
+     * StatementCount is the number of statements in the script.
+     */
+    "statementCount": number;
+
+    /**
+     * FailedStatement is the 1-based statement that failed or was cancelled, or 0.
+     */
+    "failedStatement": number;
+
+    /**
+     * ErrorPosition is PostgreSQL's 1-based character offset of the error in the script, or 0.
+     */
+    "errorPosition": number;
+
+    /**
+     * RolledBackFrom is the first statement before FailedStatement whose changes
+     * were undone because the failure aborted its transaction, or 0.
+     */
+    "rolledBackFrom": number;
 }
 
 export interface ScriptResult {
@@ -55,6 +165,11 @@ export interface ScriptResult {
     "rows": ((string | null)[] | null)[] | null;
     "command": string;
     "truncated": boolean;
+
+    /**
+     * DurationMs is the time between the previous statement finishing and this one finishing.
+     */
+    "durationMs": number;
 }
 
 export interface TableChange {

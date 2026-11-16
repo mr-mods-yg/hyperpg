@@ -24,7 +24,7 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/bindings/changeme/internal/database/postgresservice.*', route => route.fulfill({ contentType: 'text/javascript', body: fixture }))
   await page.route('**/bindings/changeme/internal/updates/updateservice.*', route => route.fulfill({ contentType: 'text/javascript', body: 'export async function CheckForUpdates() { return {available:false} }' }))
   await page.goto('/')
-  await page.getByRole('button', { name: 'Open items table', exact: true }).click()
+  await page.getByRole('treeitem', { name: 'items', exact: true }).click()
   await expect(page.locator('[data-cell="0:1"]')).toHaveText('first')
 })
 test('filters and sorts through the database, retaining options across tabs', async ({ page }) => {
@@ -38,7 +38,7 @@ test('filters and sorts through the database, retaining options across tabs', as
   await page.getByRole('button', { name: 'Sort by id', exact: true }).click()
   await expect.poll(() => page.evaluate(() => (window as any).featureState.queries.at(-1).options.sort)).toEqual([{column:'id',direction:'ASC'}])
   await page.getByRole('button', { name: 'New SQL script' }).click()
-  await page.getByRole('tab', { name: 'items', exact: true }).click()
+  await page.getByRole('tab', { name: /^items(, unsaved changes)?$/ }).click()
   await expect(page.getByRole('button', { name: 'Filters · 1', exact: true })).toBeVisible()
   await expect(page.getByRole('columnheader').filter({has:page.getByRole('button',{name:'Sort by id',exact:true})})).toHaveAttribute('aria-sort','ascending')
 })
@@ -87,7 +87,7 @@ test('shows keys and indexes and opens generated SQL in a script tab', async ({ 
   await expect(page.getByText('PRIMARY KEY (id)', { exact: true })).toBeVisible()
   await expect(page.getByText('items_name_idx', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Generate SELECT', exact: true }).click()
-  await expect(page.getByRole('tab', { name: 'items · SELECT', exact: true })).toHaveAttribute('aria-selected','true')
+  await expect(page.getByRole('tab', { name: /^items · SELECT(, unsaved changes)?$/ })).toHaveAttribute('aria-selected','true')
   await expect(page.getByRole('textbox', { name: 'SQL script' })).toHaveText('SELECT * FROM public.items LIMIT 100;')
 })
 
@@ -106,7 +106,7 @@ test('late generated SQL cannot replace a table draft after leaving Structure', 
   await page.evaluate(() => (window as any).finishGenerate())
   await expect.poll(() => page.evaluate(() => (window as any).generationFinished)).toBe(true)
   await expect(page.locator('[data-cell="0:1"]')).toHaveText('draft')
-  await expect(page.getByRole('tab', { name:'items · SELECT',exact:true })).toHaveCount(0)
+  await expect(page.getByRole('tab', { name: /^items · SELECT(, unsaved changes)?$/ })).toHaveCount(0)
 })
 
 test('export stays visible in a short workspace and dismisses with Escape or outside click', async ({ page }, testInfo) => {
@@ -157,7 +157,7 @@ test('large text in a short narrow window keeps grid rows and pagination reachab
   await expect(first).toBeFocused()
   const pagination = page.locator('.pagination-actions')
   expect(await pagination.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
-  await page.getByRole('button', { name: 'End page' }).click()
+  await page.getByRole('button', { name: 'Last page' }).click()
   await expect(page.locator('.pagination-range')).toContainText('of 600 rows')
 })
 
@@ -190,7 +190,7 @@ test('Structure markers and secondary labels use readable text in all four theme
     await page.evaluate((theme) => localStorage.setItem('hyperpg-theme', theme), theme)
     await page.reload()
     await page.getByRole('tab', { name: 'Structure', exact: true }).click()
-    for (const selector of ['.structure-empty', '.structure-intro span', '.workspace-identity > div > span']) {
+    for (const selector of ['.structure-empty', '.structure-intro span', '.table-toolbar-meta']) {
       const label = page.locator(selector).first()
       await expect(label).toBeVisible()
       const ratio = await label.evaluate((element) => {
@@ -413,7 +413,7 @@ test('filter recovery keeps the right columns after working in another table tab
   await page.getByLabel('Filter 1 value').fill('items-value')
   await page.getByRole('button', { name: 'Apply', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Filters · 1' })).toBeVisible()
-  await page.getByRole('button', { name: 'Open other table', exact: true }).click()
+  await page.getByRole('treeitem', { name: 'other', exact: true }).click()
   await page.getByRole('button', { name: 'Filters', exact: true }).click()
   await page.getByRole('button', { name: 'Add condition' }).click()
   await expect(page.getByLabel('Filter 1 column')).toHaveValue('other_id')
@@ -421,11 +421,14 @@ test('filter recovery keeps the right columns after working in another table tab
   await page.getByRole('button', { name: 'Apply', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Filters · 1' })).toBeVisible()
   await page.evaluate(() => { (window as any).featureState.failItems = true })
-  await page.getByRole('tab', { name: 'items', exact: true }).click()
+  await page.getByRole('tab', { name: /^items(, unsaved changes)?$/ }).click()
   // The tab reuses its cached page now, so request fresh rows to exercise
   // the failure path before checking that the filter draft was retained.
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('Items query failed')
+  // A failed refresh keeps the last page on screen (read-only), so the filter
+  // builder stays in the toolbar instead of the recovery panel.
+  await page.getByRole('button', { name: 'Filters · 1' }).click()
   await expect(page.getByLabel('Filter 1 value')).toHaveValue('items-value')
   await expect(page.getByLabel('Filter 1 column')).toHaveValue('id')
 })

@@ -35,12 +35,12 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/bindings/changeme/internal/database/postgresservice.*', route => route.fulfill({ contentType: 'text/javascript', body: postgresFixture }))
   await page.route('**/bindings/changeme/internal/updates/updateservice.*', route => route.fulfill({ contentType: 'text/javascript', body: 'export async function CheckForUpdates() { return { available: false, version: "dev", releaseUrl: "" } }' }))
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'Open items table' })).toBeVisible()
+  await expect(page.getByRole('treeitem', { name: 'items' })).toBeVisible()
 })
 
 test('shows fetched rows and estimated UTF-8 size, including during refresh', async ({ page }) => {
   await page.evaluate(() => { (window as any).statusTest.holdReads = true })
-  await page.getByRole('button', { name: 'Open items table' }).click()
+  await page.getByRole('treeitem', { name: 'items' }).click()
   await expect(activity(page)).toHaveText('Loading rows…')
   await expect(page.getByRole('progressbar')).toHaveCount(0)
   await expect(metrics(page)).toHaveText('—')
@@ -58,7 +58,8 @@ test('shows fetched rows and estimated UTF-8 size, including during refresh', as
   })
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()
   await expect(activity(page)).toHaveText('Refreshing rows…')
-  await expect(page.getByRole('progressbar')).toHaveCount(0)
+  // The current rows stay visible with a slim progress bar while they refresh.
+  await expect(page.getByRole('progressbar', { name: 'Loading rows' })).toBeVisible()
   await expect(cell(page)).toHaveText('café')
   await expect(grid(page)).toHaveAttribute('aria-busy', 'true')
   expect(await page.evaluate(() => (window as any).statusTest.grid === document.querySelector('.data-grid-scroll'))).toBe(true)
@@ -70,7 +71,7 @@ test('shows fetched rows and estimated UTF-8 size, including during refresh', as
 })
 
 test('shows status for a save followed by its refresh', async ({ page }) => {
-  await page.getByRole('button', { name: 'Open items table' }).click()
+  await page.getByRole('treeitem', { name: 'items' }).click()
   await expect(cell(page)).toHaveText('café')
   await cell(page).dblclick()
   await page.getByRole('textbox', { name: 'Edit value' }).fill('saved')
@@ -81,16 +82,20 @@ test('shows status for a save followed by its refresh', async ({ page }) => {
   await expect(page.getByRole('progressbar')).toHaveCount(0)
   await page.evaluate(() => (window as any).statusTest.saves.shift().resolve())
   await expect(activity(page)).toHaveText('Refreshing rows…')
-  await expect(cell(page)).toHaveText('café')
+  // Saved values stay on screen (read-only) instead of flashing back to the old value.
+  await expect(cell(page)).toHaveText('saved')
+  await expect(cell(page)).toHaveAttribute('aria-readonly', 'true')
+  await expect(page.getByText('Saved 1 change to public.items.')).toBeVisible()
   await page.evaluate(() => (window as any).statusTest.reads.shift().resolve())
   await expect(cell(page)).toHaveText('saved')
+  await expect(page.getByRole('progressbar')).toHaveCount(0)
   await expect(activity(page)).toHaveText('')
   const bytes = await page.evaluate(() => new TextEncoder().encode(JSON.stringify((window as any).statusTest.rows)).byteLength)
   await expect(metrics(page)).toHaveText(`3 rows · ~${bytes} B`)
 })
 
 test('shows failure and protects the stale page until retry succeeds', async ({ page }) => {
-  await page.getByRole('button', { name: 'Open items table' }).click()
+  await page.getByRole('treeitem', { name: 'items' }).click()
   await expect(cell(page)).toHaveText('café')
   await page.evaluate(() => { (window as any).statusTest.holdReads = true })
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()
@@ -112,7 +117,7 @@ test('shows failure and protects the stale page until retry succeeds', async ({ 
 })
 
 test('clears save status and keeps the draft when an update fails', async ({ page }) => {
-  await page.getByRole('button', { name: 'Open items table' }).click()
+  await page.getByRole('treeitem', { name: 'items' }).click()
   await expect(cell(page)).toHaveText('café')
   await cell(page).dblclick()
   await page.getByRole('textbox', { name: 'Edit value' }).fill('draft')
@@ -129,7 +134,7 @@ test('clears save status and keeps the draft when an update fails', async ({ pag
 
 test('formats empty and larger fetched pages', async ({ page }) => {
   await page.evaluate(() => { (window as any).statusTest.rows = [] })
-  await page.getByRole('button', { name: 'Open items table' }).click()
+  await page.getByRole('treeitem', { name: 'items' }).click()
   await expect(metrics(page)).toHaveText('0 rows · ~0 B')
   await page.evaluate(() => { (window as any).statusTest.rows = [['é'.repeat(1024)]] })
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()

@@ -9,6 +9,11 @@ export {
 export type {
     ColumnInfo,
     ConnectionInfo,
+    ExcelExportOptions,
+    ExcelExportProgress,
+    ExcelExportResult,
+    ExcelExportTable,
+    ExcelSheetResult,
     RowIdentity,
     SQLFile,
     SchemaCompletion,
