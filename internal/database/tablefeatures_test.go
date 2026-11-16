@@ -102,4 +102,41 @@ func TestTableFeaturesPostgres(t *testing.T) {
 		t.Fatalf("identity/computed column round trip: %v, %d, %s", err, restoredID, derived)
 	}
 
+	// The generated DDL must recreate the table. PostgreSQL 18 stores NOT NULL
+	// as pg_constraint rows (contype 'n'); they must not be listed as constraints
+	// or repeated in the DDL, where they are invalid before PostgreSQL 18.
+	var serverVersion int
+	if err = db.QueryRow(`SELECT current_setting('server_version_num')::int`).Scan(&serverVersion); err != nil {
+		t.Fatal(err)
+	}
+	ddlColumns := `id integer NOT NULL, label text CONSTRAINT label_present NOT NULL, note text, doubled integer GENERATED ALWAYS AS (id * 2) STORED, CONSTRAINT note_short CHECK (length(note) < 10)`
+	if serverVersion >= 180000 {
+		ddlColumns += `, tripled integer GENERATED ALWAYS AS (id * 3) VIRTUAL`
+	}
+	if _, err = db.Exec(`CREATE TEMP TABLE hyperpg_ddl_test (` + ddlColumns + `)`); err != nil {
+		t.Fatal(err)
+	}
+	ddlMeta, err := svc.GetTableMetadata("test", schema, "hyperpg_ddl_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ddlMeta.Constraints) != 1 || ddlMeta.Constraints[0].Name != "note_short" || ddlMeta.Constraints[0].Type != "CHECK" {
+		t.Fatalf("NOT NULL listed as a table constraint: %#v", ddlMeta.Constraints)
+	}
+	if strings.Count(ddlMeta.DDL, "CONSTRAINT") != 1 || strings.Count(ddlMeta.DDL, "NOT NULL") != 2 || !strings.Contains(ddlMeta.DDL, "STORED") {
+		t.Fatalf("bad DDL:\n%s", ddlMeta.DDL)
+	}
+	if serverVersion >= 180000 && !strings.Contains(ddlMeta.DDL, "((id * 3)) VIRTUAL") {
+		t.Fatalf("virtual generated column lost:\n%s", ddlMeta.DDL)
+	}
+	if _, err = db.Exec(`DROP TABLE hyperpg_ddl_test`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(ddlMeta.DDL); err != nil {
+		t.Fatalf("generated DDL does not run: %v\n%s", err, ddlMeta.DDL)
+	}
+	recreated, err := svc.GetTableMetadata("test", schema, "hyperpg_ddl_test")
+	if err != nil || recreated.DDL != ddlMeta.DDL {
+		t.Fatalf("DDL round trip changed the table: %v\n%s\n---\n%s", err, ddlMeta.DDL, recreated.DDL)
+	}
 }
