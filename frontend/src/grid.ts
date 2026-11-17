@@ -29,7 +29,8 @@ export function cellRange(start: CellPosition, end: CellPosition): Set<string> {
 
 // Keep disjoint selections in their grid positions; unselected cells inside
 // the bounding rectangle become empty fields. NULL/default also copy as empty.
-export function selectionCSV(rows: unknown[][], selection: Set<string>, columns: string[]): string {
+// Column headers are only included when requested.
+export function selectionCSV(rows: unknown[][], selection: Set<string>, headers?: string[]): string {
   const positions = [...selection].map((key) => key.split(':').map(Number))
     .filter(([row, column]) => row >= 0 && row < rows.length && column >= 0 && column < rows[row].length)
   if (!positions.length) return ''
@@ -39,7 +40,7 @@ export function selectionCSV(rows: unknown[][], selection: Set<string>, columns:
     minColumn = Math.min(minColumn, column); maxColumn = Math.max(maxColumn, column)
   }
   const csvField = (text: string) => /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
-  const lines: string[] = [columns.slice(minColumn, maxColumn + 1).map(csvField).join(',')]
+  const lines: string[] = headers ? [headers.slice(minColumn, maxColumn + 1).map(csvField).join(',')] : []
   for (let row = minRow; row <= maxRow; row++) {
     const fields: string[] = []
     for (let column = minColumn; column <= maxColumn; column++) {
@@ -49,6 +50,26 @@ export function selectionCSV(rows: unknown[][], selection: Set<string>, columns:
     lines.push(fields.join(','))
   }
   return lines.join('\r\n')
+}
+
+// A single cell copies its raw value so it can be pasted anywhere unchanged.
+export function selectionClipboardText(rows: unknown[][], selection: Set<string>, headers?: string[]): string {
+  if (selection.size === 1 && !headers) {
+    const [row, column] = [...selection][0].split(':').map(Number)
+    return row >= 0 && row < rows.length && column >= 0 && column < rows[row].length ? valueText(rows[row][column]) : ''
+  }
+  return selectionCSV(rows, selection, headers)
+}
+
+const numericType = /^(smallint|integer|bigint|int|int2|int4|int8|numeric|decimal|real|double precision|float4|float8|money|oid|smallserial|serial|bigserial)\b/i
+export function isNumericType(dataType: string) { return numericType.test(dataType.trim()) && !dataType.includes('[]') }
+export function isBooleanType(dataType: string) { return /^bool(ean)?$/i.test(dataType.trim()) }
+
+export type SaveSummary = { inserted: number; updated: number; deleted: number; total: number; message: string }
+export function saveSummary(changes: TableChange[], schema: string, table: string): SaveSummary {
+  const count = (kind: string) => changes.filter((change) => change.kind === kind).length
+  const total = changes.length
+  return { inserted: count('insert'), updated: count('update'), deleted: count('delete'), total, message: `Saved ${total} ${total === 1 ? 'change' : 'changes'} to ${schema}.${table}.` }
 }
 
 export function draftValue(row: DraftRow, column: ColumnInfo, index: number, edits: RowEdits): unknown {

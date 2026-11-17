@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import Button from './Button'
+import Icon from '../Icon'
 import './ActionGroup.css'
 
 // Dialogs opened by a disclosed action should return to the visible trigger.
@@ -51,7 +52,7 @@ export default function ActionGroup({ label, children, className = '' }: { label
   return <div className={`action-group ${className}${open ? ' is-open' : ''}`} ref={root} onKeyDown={(event) => {
     if (event.key === 'Escape' && open) { event.preventDefault(); event.stopPropagation(); setOpen(false); trigger.current?.focus() }
   }}>
-    <Button className="action-group-trigger" ref={trigger} aria-expanded={open} aria-controls={id} onClick={() => setOpen((value) => !value)}>{label}<span aria-hidden="true">⌄</span></Button>
+    <Button className="action-group-trigger" ref={trigger} aria-expanded={open} aria-controls={id} onClick={() => setOpen((value) => !value)}>{label}<Icon name="chevron-down" className="action-group-chevron" /></Button>
     <div id={id} className="action-group-panel" ref={panel} style={position} onClick={(event) => {
       // Nested panels own their async actions, errors and dismissal.
       const command = (event.target as HTMLElement).closest('button')

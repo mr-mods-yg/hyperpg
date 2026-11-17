@@ -18,8 +18,17 @@
   border: 1px solid var(--line-strong);
   border-radius: 8px;
   box-shadow: var(--shadow-modal);
-  font-size: calc(12px * var(--font-scale, 1));
+  font-size: var(--text-sm);
 }
 .export-menu-panel label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); }
-.export-menu-panel select { min-width: 0; width: 100%; min-height: calc(32px * var(--font-scale, 1)); padding: 4px 9px; color: var(--ink); background: var(--input-surface); border: 1px solid var(--line-strong); border-radius: 6px; font: inherit; }
+.export-menu-panel select { min-width: 0; width: 100%; min-height: var(--control-h); padding: 4px 9px; color: var(--ink); background: var(--input-surface); border: 1px solid var(--input-border); border-radius: var(--radius); font: inherit; }
 .export-menu-panel [role="alert"] { white-space: normal; overflow-wrap: anywhere; color: var(--danger); line-height: 1.5; }
+.export-menu-panel { width: 248px; }
+.export-menu-panel label { font-weight: 500; color: var(--ink); }
+.export-menu-panel > .ui-button { align-self: flex-end; }
+.export-note, .export-hint { display: flex; gap: 6px; margin: 0; color: var(--muted); line-height: 1.45; white-space: normal; }
+.export-note { padding: 8px; background: var(--surface-raised); border: 1px solid var(--line); border-radius: 6px; }
+.export-note .ui-icon { flex: 0 0 14px; width: 14px; height: 14px; margin-top: 1px; }
+.export-status { display: inline-flex; align-items: center; gap: 4px; min-width: 0; color: var(--muted); font-size: var(--text-xs); white-space: normal; }
+.export-status:empty { display: none; }
+.export-status .ui-icon { flex: 0 0 14px; width: 14px; height: 14px; color: var(--accent); }

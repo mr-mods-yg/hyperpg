@@ -15,6 +15,21 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 // @ts-ignore: Unused imports
 import * as $models from "./models.js";
 
+/**
+ * CancelExcelExport stops a running export; its partial file is deleted.
+ */
+export function CancelExcelExport(exportID: string): $CancellablePromise<boolean> {
+    return $Call.ByID(934507466, exportID);
+}
+
+/**
+ * CancelSQLScript stops the script started with the same execution ID.
+ * It reports whether that script was still running.
+ */
+export function CancelSQLScript(executionID: string): $CancellablePromise<boolean> {
+    return $Call.ByID(4028410492, executionID);
+}
+
 export function ChooseExportPath(defaultName: string): $CancellablePromise<string> {
     return $Call.ByID(2914928631, defaultName);
 }
@@ -24,6 +39,14 @@ export function ChooseExportPath(defaultName: string): $CancellablePromise<strin
  */
 export function CloseConnection(connectionID: string): $CancellablePromise<void> {
     return $Call.ByID(1305819569, connectionID);
+}
+
+/**
+ * CloseWindow closes the main window without asking again. The frontend calls it
+ * after the user confirms quitting without saving.
+ */
+export function CloseWindow(): $CancellablePromise<void> {
+    return $Call.ByID(3472977893);
 }
 
 /**
@@ -43,9 +66,18 @@ export function DeleteSavedConnection(connectionID: string): $CancellablePromise
 /**
  * ExecuteSQLScript executes the script using PostgreSQL's simple query protocol,
  * preserving statement boundaries and PostgreSQL's own transaction semantics.
+ * A non-empty executionID lets CancelSQLScript stop the script while it runs.
  */
-export function ExecuteSQLScript(connectionID: string, script: string): $CancellablePromise<$models.ScriptExecution> {
-    return $Call.ByID(1155140421, connectionID, script);
+export function ExecuteSQLScript(connectionID: string, script: string, executionID: string): $CancellablePromise<$models.ScriptExecution> {
+    return $Call.ByID(1155140421, connectionID, script, executionID);
+}
+
+/**
+ * ExportDatabaseToExcel asks for a destination and writes one worksheet per
+ * table. All sheets are read from one read-only, repeatable-read transaction.
+ */
+export function ExportDatabaseToExcel(connectionID: string, database: string, options: $models.ExcelExportOptions): $CancellablePromise<$models.ExcelExportResult> {
+    return $Call.ByID(3936629596, connectionID, database, options);
 }
 
 /**
@@ -59,6 +91,13 @@ export function ExportTableData(connectionID: string, schema: string, table: str
 
 export function GenerateTableSQL(connectionID: string, schema: string, table: string, kind: string): $CancellablePromise<string> {
     return $Call.ByID(1153320448, connectionID, schema, table, kind);
+}
+
+/**
+ * GetExcelExportProgress reports the progress of a running export.
+ */
+export function GetExcelExportProgress(exportID: string): $CancellablePromise<$models.ExcelExportProgress> {
+    return $Call.ByID(1728574789, exportID);
 }
 
 export function GetFilteredTableData(connectionID: string, schema: string, table: string, limit: number, offset: number, options: $models.TableQueryOptions): $CancellablePromise<$models.TableData> {
@@ -85,6 +124,13 @@ export function GetTableMetadata(connectionID: string, schema: string, table: st
  */
 export function ListDatabases(connectionID: string): $CancellablePromise<string[] | null> {
     return $Call.ByID(228827019, connectionID);
+}
+
+/**
+ * ListExcelExportTables lists the tables and views that can be exported from a database.
+ */
+export function ListExcelExportTables(connectionID: string, database: string): $CancellablePromise<$models.ExcelExportTable[] | null> {
+    return $Call.ByID(2395376829, connectionID, database);
 }
 
 /**
@@ -130,6 +176,13 @@ export function SaveSQLFile(path: string, name: string, content: string): $Cance
  */
 export function SaveTableChanges(connectionID: string, schema: string, tableName: string, changes: $models.TableChange[] | null): $CancellablePromise<void> {
     return $Call.ByID(3009241107, connectionID, schema, tableName, changes);
+}
+
+/**
+ * SetUnsavedChanges records whether the frontend has unsaved table edits.
+ */
+export function SetUnsavedChanges(unsaved: boolean): $CancellablePromise<void> {
+    return $Call.ByID(3624076934, unsaved);
 }
 
 /**

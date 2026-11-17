@@ -59,8 +59,8 @@ func main() {
 	// 'Mac' options tailor the window when running on macOS.
 	// 'BackgroundColour' is the background colour of the window.
 	// 'URL' is the URL that will be loaded into the webview.
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:  "hyperpg",
+	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:  "HyperPG",
 		Width:  1360,
 		Height: 860,
 		Mac: application.MacWindow{
@@ -71,6 +71,8 @@ func main() {
 		BackgroundColour: application.NewRGB(247, 249, 250),
 		URL:              "/",
 	})
+	// Ask before closing the window while table edits are unsaved.
+	database.GuardWindowClose(postgresService, window)
 
 	// Run the application. This blocks until the application has been exited.
 	err = app.Run()

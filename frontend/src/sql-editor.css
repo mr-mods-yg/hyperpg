@@ -17,15 +17,16 @@
 }
 .sql-heading, .sql-result-meta, .sql-results-heading { justify-content: space-between; }
 .sql-heading { flex: none; flex-wrap: wrap; gap: 12px; }
-.sql-heading h1 { margin: 0 0 5px; font-size: calc(16px * var(--font-scale, 1)); font-weight: 600; letter-spacing: -.02em; }
-.sql-heading > div > span, .sql-result-meta span, .sql-message { color: var(--muted); }
+.sql-heading.has-file-actions > .sql-heading-start { display: flex; min-width: 0; flex: 1 1 auto; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sql-database { display: inline-flex; min-width: 0; max-width: 100%; align-items: center; gap: 6px; overflow: hidden; color: var(--muted); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.sql-database > .ui-icon { flex: 0 0 14px; width: 14px; height: 14px; color: var(--quiet); }
+.sql-heading h1 { margin: 0 0 5px; font-size: calc(16px * var(--font-scale, 1)); font-weight: 600; letter-spacing: -.01em; }
+.sql-heading > div > span { color: var(--muted); }
 .sql-actions { min-width: 0; max-width: 100%; justify-content: flex-end; flex-wrap: wrap; }
 .sql-source { display: contents; }
 
+/* Syntax colors (--sql-*) are defined per theme in style.css. */
 .sql-editor {
-  --sql-keyword: #6343a7;
-  --sql-string: #18714a;
-  --sql-number: #a14b25;
   box-sizing: border-box;
   width: 100%;
   height: 38%;
@@ -40,17 +41,18 @@
 .sql-editor:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-halo); }
 .sql-editor .cm-editor { height: 100%; color: var(--ink); }
 .sql-editor .cm-editor.cm-focused { outline: none; }
-.sql-editor .cm-scroller { overflow: auto; font: calc(12px * var(--font-scale, 1))/1.7 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.sql-editor .cm-scroller { overflow: auto; font: var(--text-sm)/1.7 var(--font-mono); }
 .sql-editor .cm-content { padding: 12px 0; }
 .sql-editor .cm-gutters { min-width: 40px; background: var(--input-surface); color: var(--muted); border-right: 1px solid var(--line); }
 .sql-editor .cm-lineNumbers .cm-gutterElement { padding-inline: 8px; }
-.sql-editor .cm-activeLine, .sql-editor .cm-activeLineGutter { background: var(--control-hover); }
+.sql-editor .cm-activeLine, .sql-editor .cm-activeLineGutter { background: color-mix(in srgb, var(--control-hover) 70%, transparent); }
+.sql-editor .cm-activeLineGutter { color: var(--ink); }
 .sql-editor .cm-cursor { border-left-color: var(--ink); }
-.sql-editor .cm-tooltip { color: var(--ink); background: var(--white); border-color: var(--line-strong); }
-.sql-editor .cm-tooltip-autocomplete > ul > li[aria-selected] { background: var(--accent); color: var(--accent-foreground); }
-:root[data-theme="dark"] .sql-editor, :root[data-theme="discord"] .sql-editor { --sql-keyword: #c6a8ff; --sql-string: #8cdbac; --sql-number: #ffb286; }
-:root:not([data-theme]) .sql-editor, :root[data-theme="light"] .sql-editor { --sql-keyword: #303030; --sql-string: #525252; --sql-number: #525252; }
-:root[data-theme="dark"] .sql-editor { --sql-keyword: #eeeeee; --sql-string: #c2c2c2; --sql-number: #c2c2c2; }
+.sql-editor .cm-selectionBackground, .sql-editor .cm-focused .cm-selectionBackground { background: var(--grid-selection); }
+.sql-editor .cm-sql-error-statement { background: color-mix(in srgb, var(--danger) 9%, transparent); border-radius: 2px; }
+.sql-editor .cm-sql-error-point { background: color-mix(in srgb, var(--danger) 16%, transparent); text-decoration: wavy underline var(--danger); text-decoration-skip-ink: none; text-underline-offset: 3px; }
+
+/* The completion popup is styled with the other popovers in style.css. */
 
 .sql-divider { position: relative; flex: none; height: 10px; margin: -7px 0; cursor: row-resize; touch-action: none; border-radius: 4px; }
 .sql-divider::after { display: block; width: 36px; height: 3px; margin: 3px auto; border-radius: 4px; background: var(--line-strong); content: ''; }
@@ -58,25 +60,51 @@
 .sql-divider:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 .sql-results { flex: 1; min-height: 0; overflow: auto; font-size: calc(12px * var(--font-scale, 1)); }
-.sql-results-heading { min-height: 32px; padding: 0 0 12px; font-weight: 600; }
-.sql-results-heading .sql-result-actions > span { color: var(--muted); font-weight: 400; font-size: calc(11px * var(--font-scale, 1)); font-variant-numeric: tabular-nums; }
-.sql-result { background: var(--white); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; }
-.sql-result-meta { min-height: 52px; flex-wrap: wrap; padding: 10px 12px; }
-.sql-result-meta > strong { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: calc(11px * var(--font-scale, 1)); font-weight: 600; }
+.sql-results-heading { position: sticky; top: 0; z-index: 4; min-height: 32px; padding: 0 0 12px; background: var(--paper); font-weight: 600; }
+.sql-results-summary { color: var(--muted); font-weight: 400; font-size: calc(11px * var(--font-scale, 1)); font-variant-numeric: tabular-nums; }
+.sql-results-summary.is-error { color: var(--danger); font-weight: 600; }
+.sql-run-timer { min-width: 9.5ch; color: var(--muted); font-size: calc(11px * var(--font-scale, 1)); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sql-cancel-button.ui-button { color: var(--danger); border-color: var(--danger-border, var(--line-strong)); }
+.sql-cancel-button.ui-button:hover:not(:disabled) { color: var(--danger); background: var(--danger-pale); }
+.sql-result { background: var(--white); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+.sql-result-meta { min-height: 44px; flex-wrap: wrap; padding: 6px 8px 6px 12px; }
+.sql-result-meta > strong, .sql-result-command > strong { font-family: var(--font-mono); font-size: calc(11px * var(--font-scale, 1)); font-weight: 600; }
 .sql-result-actions { flex-wrap: wrap; }
-.sql-result-meta .sql-result-actions > span { margin-right: 4px; font-size: calc(11px * var(--font-scale, 1)); font-variant-numeric: tabular-nums; }
-.sql-table-wrap { overflow: auto; border-radius: 0 0 8px 8px; }
-.sql-table-wrap table { border-collapse: collapse; width: 100%; text-align: left; }
-.sql-table-wrap th, .sql-table-wrap td { border-top: 1px solid var(--line); padding: 10px 12px; white-space: pre; vertical-align: top; }
-.sql-table-wrap th { position: sticky; top: 0; background: var(--grid-head); color: var(--ink); font-size: calc(11px * var(--font-scale, 1)); font-weight: 600; }
-.sql-table-wrap th + th, .sql-table-wrap td + td { border-left: 1px solid var(--line); }
-.sql-table-wrap tbody tr:nth-child(even) { background: var(--grid-zebra); }
-.sql-table-wrap tbody tr:hover { background: var(--grid-hover); }
-.sql-table-wrap em { color: var(--muted); font-style: normal; font-size: calc(11px * var(--font-scale, 1)); }
-.sql-message { padding: 10px 0; line-height: 1.6; }
+.sql-result-meta .sql-result-actions > span, .sql-result-command > span { margin-right: 4px; color: var(--muted); font-size: calc(11px * var(--font-scale, 1)); font-variant-numeric: tabular-nums; }
+/* Statements without rows take one line instead of a card. */
+.sql-result-command { display: flex; min-height: 28px; align-items: center; gap: 10px; margin-bottom: 12px; padding: 0 12px; color: var(--muted); background: var(--surface-raised, var(--white)); border: 1px solid var(--line); border-radius: 6px; }
+.sql-result-command > strong { color: var(--ink); }
+
+/* Result rows mirror the table data grid. */
+.sql-table-wrap { max-height: min(60vh, 520px); overflow: auto; border-top: 1px solid var(--line); }
+.sql-results.is-expanded .sql-table-wrap { max-height: none; }
+.sql-grid { width: 100%; border-collapse: separate; border-spacing: 0; color: var(--ink); font-size: calc(12px * var(--font-scale, 1)); text-align: left; }
+.sql-grid th, .sql-grid td { height: var(--grid-row-h); box-sizing: border-box; padding: 0 12px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
+.sql-grid th + th, .sql-grid td + td, .sql-grid th + td { border-left: 1px solid var(--line); }
+.sql-grid thead th { position: sticky; top: 0; z-index: 2; height: var(--control-h-lg); color: var(--ink); background: var(--grid-head); font-family: var(--font-mono); font-size: calc(11px * var(--font-scale, 1)); font-weight: 550; }
+.sql-grid td { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+.sql-grid .is-numeric { text-align: right; }
+/* Inter's tnum also widens hyphens, periods and spaces, so only numeric columns get it. */
+.sql-grid td.is-numeric { font-variant-numeric: tabular-nums; }
+.sql-grid .sql-grid-index { position: sticky; left: 0; z-index: 1; width: 42px; min-width: 42px; padding: 0 9px; color: var(--muted); background: var(--grid-index); font-family: var(--font-mono); font-size: calc(10px * var(--font-scale, 1)); font-weight: 400; text-align: right; }
+.sql-grid thead .sql-grid-index { z-index: 3; background: var(--grid-index-head); }
+.sql-grid tbody tr:last-child > * { border-bottom: 0; }
+.sql-grid tbody tr:nth-child(even) td { background: var(--grid-zebra); }
+.sql-grid tbody tr:nth-child(even) .sql-grid-index { background: var(--grid-index-head); }
+.sql-grid tbody tr:hover td, .sql-grid tbody tr:hover .sql-grid-index { background: var(--grid-hover); }
+/* NULL uses the shared .null-value chip from style.css, like the data grid. */
+
+/* PostgreSQL errors keep psql's layout so the LINE caret points at the right token. */
+.sql-error { margin-bottom: 12px; padding: 10px 12px; color: var(--danger); background: var(--danger-pale); border: 1px solid var(--danger-border, var(--danger)); border-radius: 8px; }
+.sql-error-heading { display: flex; align-items: center; gap: 8px; font-size: calc(12px * var(--font-scale, 1)); }
+.sql-error-heading strong { font-weight: 600; }
+.sql-error-notes { margin: 4px 0 0 24px; color: var(--ink); line-height: 1.5; }
+.sql-error-text { margin: 8px 0 0; padding: 8px 10px; overflow-x: auto; color: var(--ink); background: var(--input-surface); border: 1px solid var(--danger-border, var(--line)); border-radius: 6px; font: calc(12px * var(--font-scale, 1))/1.55 var(--font-mono); white-space: pre-wrap; tab-size: 4; }
+
+.sql-message { padding: 10px 0; color: var(--muted); line-height: 1.6; }
 .sql-results-empty { display: flex; min-height: 150px; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; color: var(--muted); border: 1px dashed var(--line-strong); border-radius: 8px; text-align: center; line-height: 1.6; }
 .sql-results-empty > .ui-icon { width: 24px; height: 24px; flex: none; margin-bottom: 4px; color: var(--quiet); }
-.sql-results-empty strong { color: var(--ink); font-weight: 500; }
+.sql-results-empty strong { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
 
 .sql-results.is-expanded { position: fixed; z-index: 20; box-sizing: border-box; padding: 16px; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: var(--shadow-modal); }
 .sql-results.is-expanded .sql-results-heading { position: sticky; top: -16px; z-index: 1; background: var(--paper); padding-top: 4px; }

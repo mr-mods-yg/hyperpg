@@ -4,6 +4,33 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- **Export to Excel…** from a database's context menu: one sheet per table with typed values, a header row, a summary sheet, progress, and cancel.
+- Cancel running SQL queries with **Cancel** or Escape, with a live timer, Ctrl/Cmd+Enter and Ctrl/Cmd+Shift+Enter shortcuts, and failed statements marked in the editor.
+- Tab context menu with **Close others**, **Close to the right**, and **Close all**, middle-click to close, Ctrl+Tab and Ctrl+PageDown/PageUp to switch, a list of all tabs when they overflow, and unsaved-change dots.
+- **Save** and **Don't save** when closing an unsaved script, and a confirmation before closing the window with unsaved table edits.
+- Undo and redo for table edits, Delete to set NULL, more grid navigation keys, and **Copy with headers**.
+- Keyboard navigation for the sidebar tree, and a confirmation before deleting a connection.
+- Built-in shortcuts listed in Settings, and a Ctrl/Cmd+S default for saving.
+
+### Changed
+
+- Keep the grid, pagination, and focus in place while pages load, and merge the table header and status bar into the toolbar and pagination rows.
+- Copy a single cell as its raw value; CSV copies no longer include headers by default.
+- Rename export scopes, show NULL the same way in table and SQL results, and show query history errors.
+- Use consistent "Add connection" wording, keep the top bar visible without a connection, and title the window "HyperPG".
+- Rebuild the stylesheet on one set of theme tokens, with visible scrollbars and clearer selection and edit states.
+- Bundle Inter and JetBrains Mono so the interface looks the same on every platform.
+
+### Fixed
+
+- Typing into a cell no longer drops the first character.
+- Show a notice after saving table changes and keep it while the page refreshes.
+- Return focus to the connection URL after a failed connection, and to the new connection after a successful one.
+- On PostgreSQL 18, table structure no longer lists NOT NULL as constraints, and generated DDL keeps virtual generated columns virtual.
+- Report the real error when a SQL script's session is lost or times out, and the correct rolled-back statements after `ROLLBACK TO SAVEPOINT`.
+
 ## [1.0.11] - 2026-11-05
 
 ### Changed

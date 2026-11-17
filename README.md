@@ -20,8 +20,9 @@ The Windows installer sets up HyperPG for the current user, adds Start Menu and 
 - Save and open SQL files, rename scripts, and restore tabs and drafts after restart.
 - Search query history and reopen earlier queries in a new tab.
 - Filter table rows in PostgreSQL, sort columns, and inspect keys, indexes, constraints, and generated SQL.
-- Export loaded or selected rows to CSV, JSON, or SQL files, or stream an entire filtered table to a file.
-- Select multiple cells and copy them as CSV.
+- Export loaded or selected rows to CSV, JSON, or SQL files, or stream all rows matching the filters to a file.
+- Right-click a database and choose **Export to Excel…** to save its tables as an .xlsx workbook: one sheet per table, named after it, with a header row of column names, typed numbers, dates and booleans, and a summary sheet. Choose schemas and tables (and optionally views); all sheets come from one consistent read-only snapshot, with progress and cancel.
+- Copy a single cell's value, or select multiple cells and copy them as CSV, with or without column headers.
 - Add, duplicate, delete, restore, and revert rows and cells from the table context menu.
 - Resize the sidebar and collapse schema groups.
 - Choose Light, Cream, Dark, or Discord themes and adjust the interface font size.
@@ -35,20 +36,24 @@ Choose **Stable** or **Nightly** in Settings. Stable releases use version tags o
 ## Working with table data
 
 - The sidebar groups tables under **connection → database → schema → table**. Expand a connection, database, or schema to browse it. Drag the sidebar divider to resize it; its width is saved on this device.
-- Right-click a connection for **Open**, **Edit**, or **Delete**, or use the edit and delete buttons beside its name. Edit supports renaming and replacing the connection URL; leave the URL blank to keep the saved one.
+- Right-click a connection for **Open**, **Edit**, or **Delete**, or use the edit and delete buttons beside its name. Deleting asks for confirmation first. Edit supports renaming and replacing the connection URL; leave the URL blank to keep the saved one.
+- The sidebar tree works from the keyboard: arrow keys move and expand, Home and End jump, typing finds an item, F2 edits a connection, and Delete removes it after confirmation.
 - **Show all databases**, available when adding or editing a connection, lists the accessible databases on that server. When off, only the database in the connection URL is shown.
 
 - Select cells by clicking or dragging. Shift extends a range, Ctrl/Cmd toggles individual cells, and clicking a row number selects the row. Arrow keys move the active cell; Shift+arrow extends the selection. Ctrl/Cmd+A selects the current page.
-- Ctrl/Cmd+C or **Copy CSV** copies selected values as CSV with quoted commas, quotes, and line breaks. Disjoint selections retain their positions inside the selected rectangle; unselected fields and NULL values are empty. Column headers are omitted.
+- Ctrl/Cmd+C or **Copy CSV** copies a single selected cell as its raw value, and several cells as CSV with quoted commas, quotes, and line breaks. Disjoint selections retain their positions inside the selected rectangle; unselected fields and NULL values are empty. Column headers are omitted; choose **Copy with headers** in the cell menu to include them.
 - Double-click a cell or press Enter/F2 to edit. Enter finishes editing, Shift+Enter inserts a line break, and Escape cancels the current cell edit. Generated columns are read-only.
-- **Save changes** applies the draft in one transaction. **Discard changes** restores the loaded page. Navigation asks how to handle an unsaved draft.
+- **Save changes** (Ctrl/Cmd+S) applies the draft in one transaction, and the grid stays on the same cell while the page refreshes. **Discard changes** restores the loaded page and can be undone. Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z undo and redo draft edits, and Delete sets the selected cells to NULL. Navigation, and closing the window, ask how to handle an unsaved draft.
+- Paging, sorting, and filtering keep the current rows visible (read-only) until the next page arrives. Clicking a column header a third time clears its sort.
 - Right-click a cell to add a row above or below it, duplicate, delete or restore rows, set NULL, or revert cells. New rows use PostgreSQL defaults for untouched cells. Their position is temporary: after saving, rows are ordered by primary key, or by physical location when there is no primary key.
 
 ## Running SQL scripts
 
-Open a database and choose **New SQL script**. Type SQL, then select **Run script**. Select text to run only that portion, or choose **Run statement** to run the statement at the cursor. **Format** formats the script. Table and column suggestions use the active database schema. Results are shown for each statement, with the first 500 rows of each result displayed and available to copy as CSV. Use **Open SQL**, **Save SQL**, and **Rename** to manage script files. Drafts and open tabs are stored locally and restored using the original connection and database. **Query history** records SQL, database, timing, and failures; entries can be reopened or cleared.
+Open a database and choose **New SQL script**. Type SQL, then select **Run script** (Ctrl/Cmd+Shift+Enter). Select text to run only that portion, or choose **Run statement** (Ctrl/Cmd+Enter) to run the statement at the cursor. While a query runs, **Cancel** or Escape stops it in PostgreSQL. When a statement fails, the editor marks it and the results say which statements ran, were rolled back, or were skipped. **Format** formats the script. Table and column suggestions use the active database schema. Results are shown for each statement, with the first 500 rows of each result displayed and available to copy as CSV. Use **Open SQL**, **Save SQL**, and **Rename** to manage script files; closing a script with unsaved edits offers **Save** or **Don't save**. Drafts and open tabs are stored locally and restored using the original connection and database. **Query history** records SQL, database, timing, and failure messages; entries can be reopened, and clearing the history can be undone.
 
-Use **Export** to save loaded results. SQL results remain limited to the displayed first 500 rows; **Entire filtered table** in a table tab streams all matching saved rows directly from PostgreSQL. JSON preserves exact numeric values as strings. SQL exports omit computed columns and preserve identity values.
+Use **Export** to save loaded results. SQL results remain limited to the displayed first 500 rows; **All rows matching filters** in a table tab streams all matching saved rows directly from PostgreSQL. JSON preserves exact numeric values as strings. SQL exports omit computed columns and preserve identity values.
+
+Tabs show a dot when a script or table has unsaved changes. Middle-click a tab or press Delete on it to close it, and right-click it for **Close others**, **Close to the right**, and **Close all**. When tabs no longer fit, **Show all tabs** lists every open tab.
 
 Table headers sort in PostgreSQL; **Filters** applies conditions across the table, while **Search this page** searches only loaded rows. **Structure** shows constraints and indexes and can generate SQL in a new script tab. Generated DDL includes columns, constraints, and independent indexes, and labels omitted PostgreSQL table properties; it is not a full schema backup.
 
@@ -83,7 +88,7 @@ Run `npm test` and `npm run build` in `frontend`. Install the browser once with 
 
 Set `HYPERPG_TEST_DATABASE_URL` to a disposable PostgreSQL database and run `go test -tags server ./...` after building the frontend. Integration tests create and remove their own schemas and cover exact values, mixed saves, rollback, concurrent changes, and duplicate/partitioned rows. Without the variable, PostgreSQL integration tests are skipped. The release workflow runs both suites against PostgreSQL before building release assets.
 
-Configure action shortcuts in Settings. Refresh defaults to F5 and closing the active tab defaults to Ctrl+W; other actions are unassigned.
+Configure action shortcuts in Settings. Refresh defaults to F5, closing the active tab to Ctrl+W, and saving to Ctrl+S; other actions are unassigned. On macOS, Ctrl in these shortcuts means Cmd. Settings also lists the built-in shortcuts: Ctrl/Cmd+Enter and Ctrl/Cmd+Shift+Enter in the SQL editor, Escape to cancel a query, and Ctrl+Tab or Ctrl+Shift+Tab (also Ctrl+PageDown and Ctrl+PageUp) to switch tabs.
 
 ## Release branches
 
