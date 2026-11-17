@@ -4,6 +4,8 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 
 ## [Unreleased]
 
+## [1.0.12] - 2026-11-17
+
 ### Added
 
 - **Export to Excel…** from a database's context menu: one sheet per table with typed values, a header row, a summary sheet, progress, and cancel.
@@ -22,6 +24,7 @@ All notable changes to HyperPG are documented here. This changelog follows [Keep
 - Use consistent "Add connection" wording, keep the top bar visible without a connection, and title the window "HyperPG".
 - Rebuild the stylesheet on one set of theme tokens, with visible scrollbars and clearer selection and edit states.
 - Bundle Inter and JetBrains Mono so the interface looks the same on every platform.
+- Upgrade Wails to v3.1.0.
 
 ### Fixed
 
